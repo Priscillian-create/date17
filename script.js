@@ -1,6 +1,6 @@
 // Initialize Supabase with your configuration
 const supabaseUrl = 'https://qgayglybnnrhobcvftrs.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnYXQiOjE3NjI2ODQ5ODMsImV4cCI6MjA3ODI2MDk4M30.dqiEe-v1cro5N4tuawu7Y1x5klSyjINsLHd9-V40QjQ';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnYXlnbHlibm5yaG9iY3ZmdHJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2ODQ5ODMsImV4cCI6MjA3ODI2MDk4M30.dqiEe-v1cro5N4tuawu7Y1x5klSyjINsLHd9-V40QjQ';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // Initialize data structures
@@ -270,7 +270,7 @@ async function saveDataToSupabase(table, data, id = null) {
     }
     // Add optimistic updates for summary tables
     else if (table === 'sales_data') {
-        const section = id; // For sales_data, 'id' is the section name
+        const section = id; // For sales_data, 'id' is section name
         if (section && salesData[section]) {
             salesData[section] = { ...salesData[section], ...data };
             saveToLocalStorage(`salesData_${section}`, salesData[section]);
@@ -280,7 +280,7 @@ async function saveDataToSupabase(table, data, id = null) {
         }
     } 
     else if (table === 'user_data') {
-        const section = id; // For user_data, 'id' is the section name
+        const section = id; // For user_data, 'id' is section name
         if (section && userData[section]) {
             userData[section] = { ...userData[section], ...data };
             saveToLocalStorage(`userData_${section}`, userData[section]);
