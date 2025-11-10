@@ -185,19 +185,24 @@ async function saveDataToSupabase(table, data, id = null) {
         updateDepartmentStats(data.section);
         updateCategoryInventorySummary(data.section);
         updateTotalInventory();
-    } else if (table === 'sales') {
-        const section = data.section;
-        salesData[section].total_sales += data.total;
-        salesData[section].total_transactions += 1;
-        salesData[section].avg_transaction = salesData[section].total_sales / salesData[section].total_transactions;
-        userData[section].transactions += 1;
-        userData[section].sales += data.total;
-        
-        saveToLocalStorage(`salesData_${section}`, salesData[section]);
-        saveToLocalStorage(`userData_${section}`, userData[section]);
-        updateReports(section);
-        updateUserStats(section);
-        updateDepartmentStats(section);
+    } 
+    // --- FIX: Add optimistic updates for summary tables ---
+    else if (table === 'sales_data') {
+        const section = id; // For sales_data, 'id' is the section name
+        if (section && salesData[section]) {
+            salesData[section] = { ...salesData[section], ...data };
+            saveToLocalStorage(`salesData_${section}`, salesData[section]);
+            updateReports(section);
+            updateDepartmentStats(section);
+        }
+    } 
+    else if (table === 'user_data') {
+        const section = id; // For user_data, 'id' is the section name
+        if (section && userData[section]) {
+            userData[section] = { ...userData[section], ...data };
+            saveToLocalStorage(`userData_${section}`, userData[section]);
+            updateUserStats(section);
+        }
     }
     
     // 4. If online, attempt to sync with Supabase
@@ -726,31 +731,71 @@ function processCheckout(section) {
     checkoutModal.classList.add('active');
 }
 
+// --- UPDATED FUNCTION: completeCheckout ---
 function completeCheckout() {
     const checkoutModal = document.getElementById('checkoutModal');
     const section = checkoutModal.getAttribute('data-section');
-    let subtotal = 0; const saleItems = [];
+    let subtotal = 0; 
+    const saleItems = [];
+    
     carts[section].forEach(item => {
-        const itemTotal = item.price * item.quantity; subtotal += itemTotal;
+        const itemTotal = item.price * item.quantity; 
+        subtotal += itemTotal;
         saleItems.push({ id: item.id, name: item.name, price: item.price, quantity: item.quantity, total: itemTotal });
         const inventoryItem = inventory[section].find(invItem => invItem.id === item.id);
         if (inventoryItem) {
-            inventoryItem.stock -= item.quantity; inventoryItem.status = getProductStatus(inventoryItem);
+            inventoryItem.stock -= item.quantity;
+            inventoryItem.status = getProductStatus(inventoryItem);
             saveToLocalStorage(`inventory_${section}`, inventory[section]);
             saveDataToSupabase('inventory', inventoryItem, inventoryItem.id).catch(error => console.error('Error updating inventory:', error));
         }
     });
-    const saleRecord = { user_id: currentUser ? currentUser.id : 'offline_user', user_email: currentUser ? currentUser.email : 'offline@example.com', section, items: saleItems, subtotal, total: subtotal, payment_method: document.getElementById('paymentMethod').value, customer_name: document.getElementById('customerName').value, customer_phone: document.getElementById('customerPhone').value };
+    
+    const saleRecord = {
+        user_id: currentUser ? currentUser.id : 'offline_user', 
+        user_email: currentUser ? currentUser.email : 'offline@example.com', 
+        section, 
+        items: saleItems, 
+        subtotal, 
+        total: subtotal,
+        payment_method: document.getElementById('paymentMethod').value,
+        customer_name: document.getElementById('customerName').value,
+        customer_phone: document.getElementById('customerPhone').value
+    };
+
+    // --- FIX: Manually update ALL local state FIRST ---
+    salesData[section].total_sales += subtotal; 
+    salesData[section].total_transactions += 1;
+    salesData[section].avg_transaction = salesData[section].total_sales / salesData[section].total_transactions;
+    salesData[section].dailySales += subtotal; // <-- FIX: Update daily sales
+    salesData[section].dailyTransactions += 1; // <-- FIX: Update daily transactions
+    
+    userData[section].transactions += 1; 
+    userData[section].sales += subtotal;
+
+    // Save the main sale record
     saveDataToSupabase('sales', saleRecord).then(() => {
-        salesData[section].total_sales += subtotal; salesData[section].total_transactions += 1; salesData[section].avg_transaction = salesData[section].total_sales / salesData[section].total_transactions;
-        userData[section].transactions += 1; userData[section].sales += subtotal;
+        // Now save the aggregated summary data
         saveDataToSupabase('sales_data', salesData[section], section);
         saveDataToSupabase('user_data', userData[section], section);
-        carts[section] = []; saveToLocalStorage(`cart_${section}`, []);
-        updateCart(section); loadInventoryTable(section); updateReports(section); updateUserStats(section); updateDepartmentStats(section); updateCategoryInventorySummary(section); updateTotalInventory();
+        
+        // --- FIX: Update UI ONCE at the end ---
+        carts[section] = [];
+        saveToLocalStorage(`cart_${section}`, []);
+        updateCart(section); 
+        loadInventoryTable(section); 
+        updateReports(section);
+        updateUserStats(section); 
+        updateDepartmentStats(section); // This will now show the correct daily values
+        updateCategoryInventorySummary(section);
+        updateTotalInventory();
+        
         checkoutModal.classList.remove('active');
         showNotification(`Sale completed successfully!`, 'success');
-    }).catch(error => { console.error('Error saving sale:', error); showNotification('Error saving sale. Please try again.', 'error'); });
+    }).catch(error => { 
+        console.error('Error saving sale:', error); 
+        showNotification('Error saving sale. Please try again.', 'error'); 
+    });
 }
 
 function filterInventory(section, searchTerm) { loadInventoryTable(section); }
