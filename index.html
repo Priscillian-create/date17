@@ -130,6 +130,15 @@
                     <div class="sub-nav-item grill" data-view="reports">
                         <i class="fas fa-chart-bar"></i> Sales Reports
                     </div>
+                    <div class="sub-nav-item grill" data-view="expenses">
+                        <i class="fas fa-receipt"></i> Expenses
+                    </div>
+                    <div class="sub-nav-item grill" data-view="purchases">
+                        <i class="fas fa-shopping-basket"></i> Purchases
+                    </div>
+                    <div class="sub-nav-item grill" data-view="sales-history">
+                        <i class="fas fa-history"></i> Sales History
+                    </div>
                     <div class="sub-nav-item grill" data-view="account">
                         <i class="fas fa-user"></i> My Account
                     </div>
@@ -350,6 +359,100 @@
                     </div>
                 </div>
 
+                <!-- Grill Expenses View -->
+                <div id="grill-expenses-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Grill Expenses</h2>
+                            <button class="add-btn js-add-expense-btn" data-section="grill">
+                                <i class="fas fa-plus"></i> Add Expense
+                            </button>
+                        </div>
+                        
+                        <!-- Expenses Summary -->
+                        <div class="reports-summary">
+                            <div class="summary-card">
+                                <div class="summary-icon grill-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <div class="summary-value" id="grill-total-expenses">₦0.00</div>
+                                <div class="summary-label">Total Expenses</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon grill-icon">
+                                    <i class="fas fa-shopping-basket"></i>
+                                </div>
+                                <div class="summary-value" id="grill-total-purchases">₦0.00</div>
+                                <div class="summary-label">Total Purchases</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon grill-icon">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <div class="summary-value" id="grill-net-profit">₦0.00</div>
+                                <div class="summary-label">Net Profit</div>
+                            </div>
+                        </div>
+                        
+                        <div class="js-expenses-container" data-section="grill">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Expenses Recorded</h3>
+                                <p class="empty-state-description">Start tracking your expenses by adding your first expense record.</p>
+                                <button class="btn btn-primary js-add-expense-btn" data-section="grill">
+                                    <i class="fas fa-plus"></i> Add First Expense
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grill Purchases View -->
+                <div id="grill-purchases-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Grill Purchases</h2>
+                            <button class="add-btn js-add-purchase-btn" data-section="grill">
+                                <i class="fas fa-plus"></i> Add Purchase
+                            </button>
+                        </div>
+                        
+                        <div class="js-purchases-container" data-section="grill">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-shopping-basket"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Purchases Recorded</h3>
+                                <p class="empty-state-description">Start tracking your purchases by adding your first purchase record.</p>
+                                <button class="btn btn-primary js-add-purchase-btn" data-section="grill">
+                                    <i class="fas fa-plus"></i> Add First Purchase
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Grill Sales History View -->
+                <div id="grill-sales-history-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Grill Sales History</h2>
+                        </div>
+                        
+                        <div class="js-sales-records-container" data-section="grill">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-cash-register"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Sales Records</h3>
+                                <p class="empty-state-description">Sales records will appear here once you start making sales.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Grill Account View -->
                 <div id="grill-account-view" class="view-content">
                     <div class="card">
@@ -433,6 +536,15 @@
                     </div>
                     <div class="sub-nav-item wholesale" data-view="reports">
                         <i class="fas fa-chart-bar"></i> Sales Reports
+                    </div>
+                    <div class="sub-nav-item wholesale" data-view="expenses">
+                        <i class="fas fa-receipt"></i> Expenses
+                    </div>
+                    <div class="sub-nav-item wholesale" data-view="purchases">
+                        <i class="fas fa-shopping-basket"></i> Purchases
+                    </div>
+                    <div class="sub-nav-item wholesale" data-view="sales-history">
+                        <i class="fas fa-history"></i> Sales History
                     </div>
                     <div class="sub-nav-item wholesale" data-view="account">
                         <i class="fas fa-user"></i> My Account
@@ -654,6 +766,100 @@
                     </div>
                 </div>
 
+                <!-- Wholesale Expenses View -->
+                <div id="wholesale-expenses-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Wholesale Expenses</h2>
+                            <button class="add-btn js-add-expense-btn" data-section="wholesale">
+                                <i class="fas fa-plus"></i> Add Expense
+                            </button>
+                        </div>
+                        
+                        <!-- Expenses Summary -->
+                        <div class="reports-summary">
+                            <div class="summary-card">
+                                <div class="summary-icon wholesale-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <div class="summary-value" id="wholesale-total-expenses">₦0.00</div>
+                                <div class="summary-label">Total Expenses</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon wholesale-icon">
+                                    <i class="fas fa-shopping-basket"></i>
+                                </div>
+                                <div class="summary-value" id="wholesale-total-purchases">₦0.00</div>
+                                <div class="summary-label">Total Purchases</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon wholesale-icon">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <div class="summary-value" id="wholesale-net-profit">₦0.00</div>
+                                <div class="summary-label">Net Profit</div>
+                            </div>
+                        </div>
+                        
+                        <div class="js-expenses-container" data-section="wholesale">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Expenses Recorded</h3>
+                                <p class="empty-state-description">Start tracking your expenses by adding your first expense record.</p>
+                                <button class="btn btn-primary js-add-expense-btn" data-section="wholesale">
+                                    <i class="fas fa-plus"></i> Add First Expense
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wholesale Purchases View -->
+                <div id="wholesale-purchases-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Wholesale Purchases</h2>
+                            <button class="add-btn js-add-purchase-btn" data-section="wholesale">
+                                <i class="fas fa-plus"></i> Add Purchase
+                            </button>
+                        </div>
+                        
+                        <div class="js-purchases-container" data-section="wholesale">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-shopping-basket"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Purchases Recorded</h3>
+                                <p class="empty-state-description">Start tracking your purchases by adding your first purchase record.</p>
+                                <button class="btn btn-primary js-add-purchase-btn" data-section="wholesale">
+                                    <i class="fas fa-plus"></i> Add First Purchase
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wholesale Sales History View -->
+                <div id="wholesale-sales-history-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Wholesale Sales History</h2>
+                        </div>
+                        
+                        <div class="js-sales-records-container" data-section="wholesale">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-cash-register"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Sales Records</h3>
+                                <p class="empty-state-description">Sales records will appear here once you start making sales.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Wholesale Account View -->
                 <div id="wholesale-account-view" class="view-content">
                     <div class="card">
@@ -737,6 +943,15 @@
                     </div>
                     <div class="sub-nav-item building" data-view="reports">
                         <i class="fas fa-chart-bar"></i> Sales Reports
+                    </div>
+                    <div class="sub-nav-item building" data-view="expenses">
+                        <i class="fas fa-receipt"></i> Expenses
+                    </div>
+                    <div class="sub-nav-item building" data-view="purchases">
+                        <i class="fas fa-shopping-basket"></i> Purchases
+                    </div>
+                    <div class="sub-nav-item building" data-view="sales-history">
+                        <i class="fas fa-history"></i> Sales History
                     </div>
                     <div class="sub-nav-item building" data-view="account">
                         <i class="fas fa-user"></i> My Account
@@ -958,6 +1173,100 @@
                     </div>
                 </div>
 
+                <!-- Building Expenses View -->
+                <div id="building-expenses-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Building Material Expenses</h2>
+                            <button class="add-btn js-add-expense-btn" data-section="building">
+                                <i class="fas fa-plus"></i> Add Expense
+                            </button>
+                        </div>
+                        
+                        <!-- Expenses Summary -->
+                        <div class="reports-summary">
+                            <div class="summary-card">
+                                <div class="summary-icon building-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <div class="summary-value" id="building-total-expenses">₦0.00</div>
+                                <div class="summary-label">Total Expenses</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon building-icon">
+                                    <i class="fas fa-shopping-basket"></i>
+                                </div>
+                                <div class="summary-value" id="building-total-purchases">₦0.00</div>
+                                <div class="summary-label">Total Purchases</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon building-icon">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <div class="summary-value" id="building-net-profit">₦0.00</div>
+                                <div class="summary-label">Net Profit</div>
+                            </div>
+                        </div>
+                        
+                        <div class="js-expenses-container" data-section="building">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Expenses Recorded</h3>
+                                <p class="empty-state-description">Start tracking your expenses by adding your first expense record.</p>
+                                <button class="btn btn-primary js-add-expense-btn" data-section="building">
+                                    <i class="fas fa-plus"></i> Add First Expense
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Building Purchases View -->
+                <div id="building-purchases-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Building Material Purchases</h2>
+                            <button class="add-btn js-add-purchase-btn" data-section="building">
+                                <i class="fas fa-plus"></i> Add Purchase
+                            </button>
+                        </div>
+                        
+                        <div class="js-purchases-container" data-section="building">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-shopping-basket"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Purchases Recorded</h3>
+                                <p class="empty-state-description">Start tracking your purchases by adding your first purchase record.</p>
+                                <button class="btn btn-primary js-add-purchase-btn" data-section="building">
+                                    <i class="fas fa-plus"></i> Add First Purchase
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Building Sales History View -->
+                <div id="building-sales-history-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Building Material Sales History</h2>
+                        </div>
+                        
+                        <div class="js-sales-records-container" data-section="building">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-cash-register"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Sales Records</h3>
+                                <p class="empty-state-description">Sales records will appear here once you start making sales.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Building Account View -->
                 <div id="building-account-view" class="view-content">
                     <div class="card">
@@ -1041,6 +1350,15 @@
                     </div>
                     <div class="sub-nav-item food" data-view="reports">
                         <i class="fas fa-chart-bar"></i> Sales Reports
+                    </div>
+                    <div class="sub-nav-item food" data-view="expenses">
+                        <i class="fas fa-receipt"></i> Expenses
+                    </div>
+                    <div class="sub-nav-item food" data-view="purchases">
+                        <i class="fas fa-shopping-basket"></i> Purchases
+                    </div>
+                    <div class="sub-nav-item food" data-view="sales-history">
+                        <i class="fas fa-history"></i> Sales History
                     </div>
                     <div class="sub-nav-item food" data-view="account">
                         <i class="fas fa-user"></i> My Account
@@ -1257,6 +1575,100 @@
                                 </div>
                                 <h3 class="empty-state-title">No Sales Data Available</h3>
                                 <p class="empty-state-description">Start making sales to generate reports and see your business performance.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Food Expenses View -->
+                <div id="food-expenses-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Food Supplies Expenses</h2>
+                            <button class="add-btn js-add-expense-btn" data-section="food">
+                                <i class="fas fa-plus"></i> Add Expense
+                            </button>
+                        </div>
+                        
+                        <!-- Expenses Summary -->
+                        <div class="reports-summary">
+                            <div class="summary-card">
+                                <div class="summary-icon food-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <div class="summary-value" id="food-total-expenses">₦0.00</div>
+                                <div class="summary-label">Total Expenses</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon food-icon">
+                                    <i class="fas fa-shopping-basket"></i>
+                                </div>
+                                <div class="summary-value" id="food-total-purchases">₦0.00</div>
+                                <div class="summary-label">Total Purchases</div>
+                            </div>
+                            <div class="summary-card">
+                                <div class="summary-icon food-icon">
+                                    <i class="fas fa-chart-line"></i>
+                                </div>
+                                <div class="summary-value" id="food-net-profit">₦0.00</div>
+                                <div class="summary-label">Net Profit</div>
+                            </div>
+                        </div>
+                        
+                        <div class="js-expenses-container" data-section="food">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-receipt"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Expenses Recorded</h3>
+                                <p class="empty-state-description">Start tracking your expenses by adding your first expense record.</p>
+                                <button class="btn btn-primary js-add-expense-btn" data-section="food">
+                                    <i class="fas fa-plus"></i> Add First Expense
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Food Purchases View -->
+                <div id="food-purchases-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Food Supplies Purchases</h2>
+                            <button class="add-btn js-add-purchase-btn" data-section="food">
+                                <i class="fas fa-plus"></i> Add Purchase
+                            </button>
+                        </div>
+                        
+                        <div class="js-purchases-container" data-section="food">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-shopping-basket"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Purchases Recorded</h3>
+                                <p class="empty-state-description">Start tracking your purchases by adding your first purchase record.</p>
+                                <button class="btn btn-primary js-add-purchase-btn" data-section="food">
+                                    <i class="fas fa-plus"></i> Add First Purchase
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Food Sales History View -->
+                <div id="food-sales-history-view" class="view-content">
+                    <div class="card">
+                        <div class="card-header">
+                            <h2 class="card-title">Food Supplies Sales History</h2>
+                        </div>
+                        
+                        <div class="js-sales-records-container" data-section="food">
+                            <div class="empty-state">
+                                <div class="empty-state-icon">
+                                    <i class="fas fa-cash-register"></i>
+                                </div>
+                                <h3 class="empty-state-title">No Sales Records</h3>
+                                <p class="empty-state-description">Sales records will appear here once you start making sales.</p>
                             </div>
                         </div>
                     </div>
@@ -1494,6 +1906,95 @@
             <div class="modal-footer">
                 <button class="btn btn-secondary js-modal-close" data-target="editInventoryModal">Cancel</button>
                 <button class="btn btn-primary js-update-inventory-btn">Update Product</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Expense Modal -->
+    <div id="addExpenseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Add Expense</h3>
+                <button class="modal-close js-modal-close" data-target="addExpenseModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addExpenseForm">
+                    <div class="form-group">
+                        <label class="form-label" for="expenseDescription">Description</label>
+                        <input type="text" class="form-input" id="expenseDescription" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="expenseCategory">Category</label>
+                        <select class="form-input" id="expenseCategory">
+                            <option value="utilities">Utilities</option>
+                            <option value="rent">Rent</option>
+                            <option value="salaries">Salaries</option>
+                            <option value="maintenance">Maintenance</option>
+                            <option value="supplies">Supplies</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="expenseAmount">Amount (₦)</label>
+                        <input type="number" class="form-input" id="expenseAmount" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="expenseDate">Date</label>
+                        <input type="date" class="form-input" id="expenseDate" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary js-modal-close" data-target="addExpenseModal">Cancel</button>
+                <button class="btn btn-primary js-add-expense-confirm-btn">Add Expense</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Purchase Modal -->
+    <div id="addPurchaseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Add Purchase</h3>
+                <button class="modal-close js-modal-close" data-target="addPurchaseModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="addPurchaseForm">
+                    <div class="form-group">
+                        <label class="form-label" for="purchaseDescription">Description</label>
+                        <input type="text" class="form-input" id="purchaseDescription" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="purchaseSupplier">Supplier</label>
+                        <input type="text" class="form-input" id="purchaseSupplier">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="purchaseAmount">Amount (₦)</label>
+                        <input type="number" class="form-input" id="purchaseAmount" step="0.01" required>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="purchaseDate">Date</label>
+                        <input type="date" class="form-input" id="purchaseDate" required>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary js-modal-close" data-target="addPurchaseModal">Cancel</button>
+                <button class="btn btn-primary js-add-purchase-confirm-btn">Add Purchase</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View Sales Record Modal -->
+    <div id="viewSalesRecordModal" class="modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3 class="modal-title">Sales Record Details</h3>
+                <button class="modal-close js-modal-close" data-target="viewSalesRecordModal">&times;</button>
+            </div>
+            <div id="salesRecordDetails"></div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary js-modal-close" data-target="viewSalesRecordModal">Close</button>
             </div>
         </div>
     </div>

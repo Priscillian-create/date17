@@ -44,6 +44,30 @@ const userData = {
     'food': { transactions: 0, sales: 0 }
 };
 
+// NEW: Initialize expenses data for each section
+const expensesData = {
+    'grill': [],
+    'wholesale': [],
+    'building': [],
+    'food': []
+};
+
+// NEW: Initialize purchases data for each section
+const purchasesData = {
+    'grill': [],
+    'wholesale': [],
+    'building': [],
+    'food': []
+};
+
+// NEW: Initialize sales records for each section
+const salesRecords = {
+    'grill': [],
+    'wholesale': [],
+    'building': [],
+    'food': []
+};
+
 // Current section and view
 let currentSection = 'grill';
 let currentView = 'pos';
@@ -57,6 +81,10 @@ function loadDataFromLocalStorage() {
         salesData[section] = loadFromLocalStorage(`salesData_${section}`, salesData[section]);
         userData[section] = loadFromLocalStorage(`userData_${section}`, userData[section]);
         carts[section] = loadFromLocalStorage(`cart_${section}`, []);
+        // NEW: Load expenses, purchases, and sales records
+        expensesData[section] = loadFromLocalStorage(`expenses_${section}`, []);
+        purchasesData[section] = loadFromLocalStorage(`purchases_${section}`, []);
+        salesRecords[section] = loadFromLocalStorage(`salesRecords_${section}`, []);
     });
 }
 
@@ -122,6 +150,13 @@ function formatDate(dateString) {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString();
+}
+
+// Format date and time for display
+function formatDateTime(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString();
 }
 
 // Update category inventory summary
@@ -197,6 +232,41 @@ async function saveDataToSupabase(table, data, id = null) {
         updateCategoryInventorySummary(data.section);
         updateTotalInventory();
     } 
+    // NEW: Handle expenses
+    else if (table === 'expenses') {
+        if (!id) {
+            id = generateOfflineId();
+            localData.id = id;
+            localData.isOffline = true;
+            expensesData[data.section].unshift(localData); // Add to beginning
+        }
+        saveToLocalStorage(`expenses_${data.section}`, expensesData[data.section]);
+        loadExpensesTable(data.section);
+        updateDepartmentStats(data.section);
+    }
+    // NEW: Handle purchases
+    else if (table === 'purchases') {
+        if (!id) {
+            id = generateOfflineId();
+            localData.id = id;
+            localData.isOffline = true;
+            purchasesData[data.section].unshift(localData); // Add to beginning
+        }
+        saveToLocalStorage(`purchases_${data.section}`, purchasesData[data.section]);
+        loadPurchasesTable(data.section);
+        updateDepartmentStats(data.section);
+    }
+    // NEW: Handle sales records
+    else if (table === 'sales_records') {
+        if (!id) {
+            id = generateOfflineId();
+            localData.id = id;
+            localData.isOffline = true;
+            salesRecords[data.section].unshift(localData); // Add to beginning
+        }
+        saveToLocalStorage(`salesRecords_${data.section}`, salesRecords[data.section]);
+        loadSalesRecordsTable(data.section);
+    }
     // --- FIX: Add optimistic updates for summary tables ---
     else if (table === 'sales_data') {
         const section = id; // For sales_data, 'id' is the section name
@@ -405,10 +475,12 @@ supabase.auth.onAuthStateChange((event, session) => {
         document.getElementById('loginScreen').style.display = 'none';
         document.getElementById('mainApp').style.display = 'block';
         updateUserInfo(session.user);
+        // Initialize app with local data first
+        initializeApp();
+        // Then load from server
         loadDataFromSupabase();
         window.addEventListener('online', handleOnlineStatus);
         window.addEventListener('offline', handleOfflineStatus);
-        initializeApp();
     } else if (event === 'SIGNED_OUT') {
         currentUser = null;
         document.getElementById('loginScreen').style.display = 'flex';
@@ -450,9 +522,51 @@ async function loadDataFromSupabase() {
     if (!navigator.onLine) return;
     try {
         console.log('Loading data from Supabase...');
-        sections.forEach(section => {
-            supabase.from('inventory').select('*').eq('section', section).is('deleted', 'false').then(({ data, error }) => {
-                if (error) { console.error(`Error loading ${section} inventory:`, error); return; }
+        
+        // Use Promise.all to load all data in parallel for better performance
+        const inventoryPromises = sections.map(section => 
+            supabase.from('inventory').select('*').eq('section', section).is('deleted', 'false')
+        );
+        
+        const salesDataPromises = sections.map(section => 
+            supabase.from('sales_data').select('*').eq('id', section).single()
+        );
+        
+        const userDataPromises = sections.map(section => 
+            supabase.from('user_data').select('*').eq('id', section).single()
+        );
+        
+        // NEW: Load expenses, purchases, and sales records
+        const expensesPromises = sections.map(section => 
+            supabase.from('expenses').select('*').eq('section', section).order('created_at', { ascending: false })
+        );
+        
+        const purchasesPromises = sections.map(section => 
+            supabase.from('purchases').select('*').eq('section', section).order('created_at', { ascending: false })
+        );
+        
+        const salesRecordsPromises = sections.map(section => 
+            supabase.from('sales_records').select('*').eq('section', section).order('created_at', { ascending: false })
+        );
+        
+        // Wait for all promises to resolve
+        const [inventoryResults, salesDataResults, userDataResults, expensesResults, purchasesResults, salesRecordsResults] = await Promise.allSettled([
+            Promise.all(inventoryPromises),
+            Promise.all(salesDataPromises),
+            Promise.all(userDataPromises),
+            Promise.all(expensesPromises),
+            Promise.all(purchasesPromises),
+            Promise.all(salesRecordsPromises)
+        ]);
+        
+        // Process inventory results
+        if (inventoryResults.status === 'fulfilled') {
+            inventoryResults.value.forEach(({ data, error }, index) => {
+                const section = sections[index];
+                if (error) {
+                    console.error(`Error loading ${section} inventory:`, error);
+                    return;
+                }
                 if (data) {
                     // Replace local inventory with server data (offline items have been removed during sync)
                     inventory[section] = data;
@@ -460,27 +574,78 @@ async function loadDataFromSupabase() {
                     loadInventoryTable(section);
                     updateDepartmentStats(section);
                     updateCategoryInventorySummary(section);
-                    updateTotalInventory();
                 }
             });
-            supabase.from('sales_data').select('*').eq('id', section).single().then(({ data, error }) => {
-                if (!error && data) { 
-                    // Replace with server data (local changes have been synced)
-                    salesData[section] = data; 
-                    saveToLocalStorage(`salesData_${section}`, salesData[section]); 
-                    updateReports(section); 
+        }
+        
+        // Process sales data results
+        if (salesDataResults.status === 'fulfilled') {
+            salesDataResults.value.forEach(({ data, error }, index) => {
+                const section = sections[index];
+                if (!error && data) {
+                    // Merge with local data, preserving any local changes
+                    salesData[section] = { ...data, ...salesData[section] };
+                    saveToLocalStorage(`salesData_${section}`, salesData[section]);
+                    updateReports(section);
                 }
             });
-            supabase.from('user_data').select('*').eq('id', section).single().then(({ data, error }) => {
-                if (!error && data) { 
-                    // Replace with server data (local changes have been synced)
-                    userData[section] = data; 
-                    saveToLocalStorage(`userData_${section}`, userData[section]); 
-                    updateUserStats(section); 
+        }
+        
+        // Process user data results
+        if (userDataResults.status === 'fulfilled') {
+            userDataResults.value.forEach(({ data, error }, index) => {
+                const section = sections[index];
+                if (!error && data) {
+                    // Merge with local data, preserving any local changes
+                    userData[section] = { ...data, ...userData[section] };
+                    saveToLocalStorage(`userData_${section}`, userData[section]);
+                    updateUserStats(section);
                 }
             });
-        });
-    } catch (error) { console.error('Error loading data from Supabase:', error); }
+        }
+        
+        // NEW: Process expenses results
+        if (expensesResults.status === 'fulfilled') {
+            expensesResults.value.forEach(({ data, error }, index) => {
+                const section = sections[index];
+                if (!error && data) {
+                    expensesData[section] = data;
+                    saveToLocalStorage(`expenses_${section}`, expensesData[section]);
+                    loadExpensesTable(section);
+                }
+            });
+        }
+        
+        // NEW: Process purchases results
+        if (purchasesResults.status === 'fulfilled') {
+            purchasesResults.value.forEach(({ data, error }, index) => {
+                const section = sections[index];
+                if (!error && data) {
+                    purchasesData[section] = data;
+                    saveToLocalStorage(`purchases_${section}`, purchasesData[section]);
+                    loadPurchasesTable(section);
+                }
+            });
+        }
+        
+        // NEW: Process sales records results
+        if (salesRecordsResults.status === 'fulfilled') {
+            salesRecordsResults.value.forEach(({ data, error }, index) => {
+                const section = sections[index];
+                if (!error && data) {
+                    salesRecords[section] = data;
+                    saveToLocalStorage(`salesRecords_${section}`, salesRecords[section]);
+                    loadSalesRecordsTable(section);
+                }
+            });
+        }
+        
+        // Update total inventory once after all sections are loaded
+        updateTotalInventory();
+        
+    } catch (error) { 
+        console.error('Error loading data from Supabase:', error); 
+    }
 }
 
 // --- EVENT LISTENERS ---
@@ -491,7 +656,9 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('loginScreen').style.display = 'none';
             document.getElementById('mainApp').style.display = 'block';
             updateUserInfo(session.user);
+            // Initialize app with local data first
             initializeApp();
+            // Then load from server
             loadDataFromSupabase();
             window.addEventListener('online', handleOnlineStatus);
             window.addEventListener('offline', handleOfflineStatus);
@@ -546,6 +713,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelector('.js-complete-checkout-btn').addEventListener('click', completeCheckout);
     document.querySelector('.js-reset-password-btn').addEventListener('click', resetPassword);
 
+    // NEW: Event listeners for expenses, purchases, and sales records
+    document.querySelector('.js-add-expense-btn').addEventListener('click', () => showAddExpenseModal(currentSection));
+    document.querySelector('.js-add-purchase-btn').addEventListener('click', () => showAddPurchaseModal(currentSection));
+    document.querySelector('.js-add-expense-confirm-btn').addEventListener('click', addExpense);
+    document.querySelector('.js-add-purchase-confirm-btn').addEventListener('click', addPurchase);
+
     setupEventDelegation();
 });
 
@@ -574,6 +747,10 @@ function setupEventDelegation() {
             if (view === 'inventory') { loadInventoryTable(section); updateCategoryInventorySummary(section); }
             else if (view === 'reports') updateReports(section);
             else if (view === 'account') updateUserStats(section);
+            // NEW: Handle new views
+            else if (view === 'expenses') { loadExpensesTable(section); updateDepartmentStats(section); }
+            else if (view === 'purchases') { loadPurchasesTable(section); updateDepartmentStats(section); }
+            else if (view === 'sales-history') { loadSalesRecordsTable(section); }
         });
     });
 
@@ -629,6 +806,40 @@ function setupEventDelegation() {
         if (btn.classList.contains('delete')) deleteInventoryItem(section, itemId);
         else editInventoryItem(section, itemId);
     });
+
+    // NEW: Event delegation for expenses table
+    document.querySelectorAll('.js-expenses-container').forEach(container => {
+        container.addEventListener('click', (e) => {
+            const section = container.getAttribute('data-section');
+            const btn = e.target.closest('.action-btn'); if (!btn) return;
+            const row = btn.closest('tr');
+            const itemId = row.getAttribute('data-item-id');
+            if (btn.classList.contains('delete')) deleteExpense(section, itemId);
+        });
+    });
+
+    // NEW: Event delegation for purchases table
+    document.querySelectorAll('.js-purchases-container').forEach(container => {
+        container.addEventListener('click', (e) => {
+            const section = container.getAttribute('data-section');
+            const btn = e.target.closest('.action-btn'); if (!btn) return;
+            const row = btn.closest('tr');
+            const itemId = row.getAttribute('data-item-id');
+            if (btn.classList.contains('delete')) deletePurchase(section, itemId);
+        });
+    });
+
+    // NEW: Event delegation for sales records table
+    document.querySelectorAll('.js-sales-records-container').forEach(container => {
+        container.addEventListener('click', (e) => {
+            const section = container.getAttribute('data-section');
+            const btn = e.target.closest('.action-btn'); if (!btn) return;
+            const row = btn.closest('tr');
+            const itemId = row.getAttribute('data-item-id');
+            if (btn.classList.contains('delete')) deleteSalesRecord(section, itemId);
+            else if (btn.classList.contains('view')) viewSalesRecord(section, itemId);
+        });
+    });
 }
 
 // --- FUNCTIONS ---
@@ -641,6 +852,10 @@ function initializeApp() {
         updateReports(section);
         updateUserStats(section);
         updateCategoryInventorySummary(section);
+        // NEW: Initialize new views
+        loadExpensesTable(section);
+        loadPurchasesTable(section);
+        loadSalesRecordsTable(section);
         const form = document.getElementById(`${section}-account-form`);
         if (form) form.addEventListener('submit', (e) => { e.preventDefault(); saveAccountInfo(section); });
         const searchInput = document.querySelector(`.js-inventory-search[data-section="${section}"]`);
@@ -722,6 +937,64 @@ function loadInventoryTable(section) {
     inventoryContainer.appendChild(inventoryTable);
 }
 
+// NEW: Load expenses table
+function loadExpensesTable(section) {
+    const expensesContainer = document.querySelector(`.js-expenses-container[data-section="${section}"]`);
+    if (!expensesContainer) return;
+    
+    expensesContainer.innerHTML = '';
+    if (expensesData[section].length === 0) {
+        expensesContainer.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-receipt"></i></div><h3 class="empty-state-title">No Expenses Recorded</h3><p class="empty-state-description">Start tracking your expenses by adding your first expense record.</p><button class="btn btn-primary js-add-expense-btn" data-section="${section}"><i class="fas fa-plus"></i> Add First Expense</button></div>`;
+        return;
+    }
+    
+    const expensesTable = document.createElement('table');
+    expensesTable.className = 'inventory-table';
+    expensesTable.innerHTML = `<thead><tr><th>Description</th><th>Category</th><th>Amount</th><th>Date</th><th>Actions</th></tr></thead><tbody>${expensesData[section].map(expense => {
+        return `<tr data-item-id="${expense.id}"><td>${expense.description} ${expense.isOffline ? '<i class="fas fa-wifi" style="color: #f39c12;" title="Pending sync"></i>' : ''}</td><td>${expense.category || 'General'}</td><td>₦${expense.amount.toFixed(2)}</td><td>${formatDate(expense.date)}</td><td><button class="action-btn delete"><i class="fas fa-trash"></i></button></td></tr>`;
+    }).join('')}</tbody>`;
+    expensesContainer.appendChild(expensesTable);
+}
+
+// NEW: Load purchases table
+function loadPurchasesTable(section) {
+    const purchasesContainer = document.querySelector(`.js-purchases-container[data-section="${section}"]`);
+    if (!purchasesContainer) return;
+    
+    purchasesContainer.innerHTML = '';
+    if (purchasesData[section].length === 0) {
+        purchasesContainer.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-shopping-basket"></i></div><h3 class="empty-state-title">No Purchases Recorded</h3><p class="empty-state-description">Start tracking your purchases by adding your first purchase record.</p><button class="btn btn-primary js-add-purchase-btn" data-section="${section}"><i class="fas fa-plus"></i> Add First Purchase</button></div>`;
+        return;
+    }
+    
+    const purchasesTable = document.createElement('table');
+    purchasesTable.className = 'inventory-table';
+    purchasesTable.innerHTML = `<thead><tr><th>Description</th><th>Supplier</th><th>Amount</th><th>Date</th><th>Actions</th></tr></thead><tbody>${purchasesData[section].map(purchase => {
+        return `<tr data-item-id="${purchase.id}"><td>${purchase.description} ${purchase.isOffline ? '<i class="fas fa-wifi" style="color: #f39c12;" title="Pending sync"></i>' : ''}</td><td>${purchase.supplier || 'N/A'}</td><td>₦${purchase.amount.toFixed(2)}</td><td>${formatDate(purchase.date)}</td><td><button class="action-btn delete"><i class="fas fa-trash"></i></button></td></tr>`;
+    }).join('')}</tbody>`;
+    purchasesContainer.appendChild(purchasesTable);
+}
+
+// NEW: Load sales records table
+function loadSalesRecordsTable(section) {
+    const salesRecordsContainer = document.querySelector(`.js-sales-records-container[data-section="${section}"]`);
+    if (!salesRecordsContainer) return;
+    
+    salesRecordsContainer.innerHTML = '';
+    if (salesRecords[section].length === 0) {
+        salesRecordsContainer.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-cash-register"></i></div><h3 class="empty-state-title">No Sales Records</h3><p class="empty-state-description">Sales records will appear here once you start making sales.</p></div>`;
+        return;
+    }
+    
+    const salesRecordsTable = document.createElement('table');
+    salesRecordsTable.className = 'inventory-table';
+    salesRecordsTable.innerHTML = `<thead><tr><th>Date</th><th>Customer</th><th>Items</th><th>Total</th><th>Payment</th><th>Actions</th></tr></thead><tbody>${salesRecords[section].map(record => {
+        const itemsCount = record.items ? record.items.length : 0;
+        return `<tr data-item-id="${record.id}"><td>${formatDateTime(record.created_at)} ${record.isOffline ? '<i class="fas fa-wifi" style="color: #f39c12;" title="Pending sync"></i>' : ''}</td><td>${record.customer_name || 'Walk-in'}</td><td>${itemsCount} items</td><td>₦${record.total.toFixed(2)}</td><td>${record.payment_method || 'Cash'}</td><td><button class="action-btn view"><i class="fas fa-eye"></i></button><button class="action-btn delete"><i class="fas fa-trash"></i></button></td></tr>`;
+    }).join('')}</tbody>`;
+    salesRecordsContainer.appendChild(salesRecordsTable);
+}
+
 function updateTotalInventory() {
     let totalProducts = 0, totalValue = 0, totalExpired = 0, totalExpiringSoon = 0;
     sections.forEach(section => {
@@ -786,6 +1059,22 @@ function showAddInventoryModal(section) {
     modal.classList.add('active');
 }
 
+// NEW: Show add expense modal
+function showAddExpenseModal(section) {
+    const modal = document.getElementById('addExpenseModal');
+    document.getElementById('addExpenseForm').reset();
+    modal.setAttribute('data-section', section);
+    modal.classList.add('active');
+}
+
+// NEW: Show add purchase modal
+function showAddPurchaseModal(section) {
+    const modal = document.getElementById('addPurchaseModal');
+    document.getElementById('addPurchaseForm').reset();
+    modal.setAttribute('data-section', section);
+    modal.classList.add('active');
+}
+
 function addNewInventory() {
     const modal = document.getElementById('addInventoryModal');
     const section = modal.getAttribute('data-section');
@@ -799,6 +1088,36 @@ function addNewInventory() {
         modal.classList.remove('active');
         showNotification(`${name} added successfully!`, 'success');
     }).catch(error => { console.error('Error adding item:', error); });
+}
+
+// NEW: Add expense
+function addExpense() {
+    const modal = document.getElementById('addExpenseModal');
+    const section = modal.getAttribute('data-section');
+    const description = document.getElementById('expenseDescription').value;
+    const category = document.getElementById('expenseCategory').value;
+    const amount = parseFloat(document.getElementById('expenseAmount').value);
+    const date = document.getElementById('expenseDate').value;
+    const newExpense = { section, description, category, amount, date, created_by: currentUser ? currentUser.id : 'offline_user' };
+    saveDataToSupabase('expenses', newExpense).then(() => {
+        modal.classList.remove('active');
+        showNotification('Expense added successfully!', 'success');
+    }).catch(error => { console.error('Error adding expense:', error); });
+}
+
+// NEW: Add purchase
+function addPurchase() {
+    const modal = document.getElementById('addPurchaseModal');
+    const section = modal.getAttribute('data-section');
+    const description = document.getElementById('purchaseDescription').value;
+    const supplier = document.getElementById('purchaseSupplier').value;
+    const amount = parseFloat(document.getElementById('purchaseAmount').value);
+    const date = document.getElementById('purchaseDate').value;
+    const newPurchase = { section, description, supplier, amount, date, created_by: currentUser ? currentUser.id : 'offline_user' };
+    saveDataToSupabase('purchases', newPurchase).then(() => {
+        modal.classList.remove('active');
+        showNotification('Purchase added successfully!', 'success');
+    }).catch(error => { console.error('Error adding purchase:', error); });
 }
 
 function editInventoryItem(section, itemId) {
@@ -832,6 +1151,132 @@ function updateInventoryItem() {
             editModal.classList.remove('active');
             showNotification(`${name} updated successfully!`, 'success');
         }).catch(error => { console.error('Error updating item:', error); });
+    }
+}
+
+// NEW: Delete expense
+function deleteExpense(section, expenseId) {
+    if (confirm('Are you sure you want to delete this expense?')) {
+        if (navigator.onLine && !expenseId.startsWith('offline_')) {
+            supabase.from('expenses').delete().eq('id', expenseId).then(({ error }) => {
+                if (error) {
+                    console.error('Error deleting expense:', error);
+                    showNotification('Error deleting expense', 'error');
+                } else {
+                    showNotification('Expense deleted successfully', 'success');
+                }
+            });
+        }
+        
+        // Remove from local data immediately
+        expensesData[section] = expensesData[section].filter(expense => expense.id !== expenseId);
+        saveToLocalStorage(`expenses_${section}`, expensesData[section]);
+        loadExpensesTable(section);
+        updateDepartmentStats(section);
+    }
+}
+
+// NEW: Delete purchase
+function deletePurchase(section, purchaseId) {
+    if (confirm('Are you sure you want to delete this purchase?')) {
+        if (navigator.onLine && !purchaseId.startsWith('offline_')) {
+            supabase.from('purchases').delete().eq('id', purchaseId).then(({ error }) => {
+                if (error) {
+                    console.error('Error deleting purchase:', error);
+                    showNotification('Error deleting purchase', 'error');
+                } else {
+                    showNotification('Purchase deleted successfully', 'success');
+                }
+            });
+        }
+        
+        // Remove from local data immediately
+        purchasesData[section] = purchasesData[section].filter(purchase => purchase.id !== purchaseId);
+        saveToLocalStorage(`purchases_${section}`, purchasesData[section]);
+        loadPurchasesTable(section);
+        updateDepartmentStats(section);
+    }
+}
+
+// NEW: Delete sales record
+function deleteSalesRecord(section, recordId) {
+    if (confirm('Are you sure you want to delete this sales record? This will reverse the sale and restore inventory.')) {
+        const record = salesRecords[section].find(r => r.id === recordId);
+        if (record) {
+            // Restore inventory items
+            if (record.items) {
+                record.items.forEach(item => {
+                    const inventoryItem = inventory[section].find(inv => inv.id === item.id);
+                    if (inventoryItem) {
+                        inventoryItem.stock += item.quantity;
+                        saveDataToSupabase('inventory', inventoryItem, inventoryItem.id);
+                    }
+                });
+            }
+            
+            // Update sales data
+            salesData[section].total_sales -= record.total;
+            salesData[section].total_transactions -= 1;
+            if (salesData[section].total_transactions > 0) {
+                salesData[section].avg_transaction = salesData[section].total_sales / salesData[section].total_transactions;
+            } else {
+                salesData[section].avg_transaction = 0;
+            }
+            saveDataToSupabase('sales_data', salesData[section], section);
+            
+            // Delete from database
+            if (navigator.onLine && !recordId.startsWith('offline_')) {
+                supabase.from('sales_records').delete().eq('id', recordId).then(({ error }) => {
+                    if (error) {
+                        console.error('Error deleting sales record:', error);
+                        showNotification('Error deleting sales record', 'error');
+                    } else {
+                        showNotification('Sales record deleted and inventory restored', 'success');
+                    }
+                });
+            }
+            
+            // Remove from local data
+            salesRecords[section] = salesRecords[section].filter(record => record.id !== recordId);
+            saveToLocalStorage(`salesRecords_${section}`, salesRecords[section]);
+            loadSalesRecordsTable(section);
+            updateReports(section);
+            updateDepartmentStats(section);
+        }
+    }
+}
+
+// NEW: View sales record details
+function viewSalesRecord(section, recordId) {
+    const record = salesRecords[section].find(r => r.id === recordId);
+    if (record) {
+        const modal = document.getElementById('viewSalesRecordModal');
+        const detailsContainer = document.getElementById('salesRecordDetails');
+        
+        let itemsHTML = '';
+        if (record.items) {
+            itemsHTML = '<table class="inventory-table"><thead><tr><th>Item</th><th>Price</th><th>Quantity</th><th>Total</th></tr></thead><tbody>';
+            record.items.forEach(item => {
+                itemsHTML += `<tr><td>${item.name}</td><td>₦${item.price.toFixed(2)}</td><td>${item.quantity}</td><td>₦${item.total.toFixed(2)}</td></tr>`;
+            });
+            itemsHTML += '</tbody></table>';
+        }
+        
+        detailsContainer.innerHTML = `
+            <div class="sales-record-info">
+                <p><strong>Date:</strong> ${formatDateTime(record.created_at)}</p>
+                <p><strong>Customer:</strong> ${record.customer_name || 'Walk-in'}</p>
+                <p><strong>Phone:</strong> ${record.customer_phone || 'N/A'}</p>
+                <p><strong>Payment Method:</strong> ${record.payment_method || 'Cash'}</p>
+                <p><strong>Total Amount:</strong> ₦${record.total.toFixed(2)}</p>
+            </div>
+            <div class="sales-record-items">
+                <h3>Items Purchased</h3>
+                ${itemsHTML}
+            </div>
+        `;
+        
+        modal.classList.add('active');
     }
 }
 
@@ -936,29 +1381,41 @@ function completeCheckout() {
     });
     
     const saleRecord = {
-        user_id: currentUser ? currentUser.id : 'offline_user', 
-        user_email: currentUser ? currentUser.email : 'offline@example.com', 
-        section, 
+        section,
         items: saleItems, 
-        subtotal, 
         total: subtotal,
         payment_method: document.getElementById('paymentMethod').value,
         customer_name: document.getElementById('customerName').value,
-        customer_phone: document.getElementById('customerPhone').value
+        customer_phone: document.getElementById('customerPhone').value,
+        created_at: new Date().toISOString()
     };
 
     // --- FIX: Manually update ALL local state FIRST ---
     salesData[section].total_sales += subtotal; 
     salesData[section].total_transactions += 1;
     salesData[section].avg_transaction = salesData[section].total_sales / salesData[section].total_transactions;
-    salesData[section].dailySales += subtotal; // <-- FIX: Update daily sales
-    salesData[section].dailyTransactions += 1; // <-- FIX: Update daily transactions
+    salesData[section].dailySales += subtotal;
+    salesData[section].dailyTransactions += 1;
     
     userData[section].transactions += 1; 
     userData[section].sales += subtotal;
 
     // Save the main sale record
-    saveDataToSupabase('sales', saleRecord).then(() => {
+    saveDataToSupabase('sales_records', saleRecord).then(() => {
+        // Save to legacy sales table for compatibility
+        const legacySaleRecord = {
+            user_id: currentUser ? currentUser.id : 'offline_user', 
+            user_email: currentUser ? currentUser.email : 'offline@example.com', 
+            section, 
+            items: saleItems, 
+            subtotal, 
+            total: subtotal,
+            payment_method: document.getElementById('paymentMethod').value,
+            customer_name: document.getElementById('customerName').value,
+            customer_phone: document.getElementById('customerPhone').value
+        };
+        saveDataToSupabase('sales', legacySaleRecord);
+        
         // Now save the aggregated summary data
         saveDataToSupabase('sales_data', salesData[section], section);
         saveDataToSupabase('user_data', userData[section], section);
@@ -970,7 +1427,7 @@ function completeCheckout() {
         loadInventoryTable(section); 
         updateReports(section);
         updateUserStats(section); 
-        updateDepartmentStats(section); // This will now show the correct daily values
+        updateDepartmentStats(section);
         updateCategoryInventorySummary(section);
         updateTotalInventory();
         
@@ -1001,9 +1458,20 @@ function updateUserStats(section) {
 function updateDepartmentStats(section) {
     const lowStockItems = inventory[section].filter(item => getProductStatus(item) === 'low-stock').length;
     const dailySales = salesData[section]?.dailySales || 0;
+    
+    // NEW: Calculate total expenses and purchases
+    const totalExpenses = expensesData[section].reduce((sum, expense) => sum + expense.amount, 0);
+    const totalPurchases = purchasesData[section].reduce((sum, purchase) => sum + purchase.amount, 0);
+    
     document.getElementById(`${section}-daily-sales`).textContent = `₦${dailySales.toFixed(2)}`;
     document.getElementById(`${section}-daily-transactions`).textContent = salesData[section]?.dailyTransactions || 0;
     document.getElementById(`${section}-low-stock`).textContent = lowStockItems;
+    
+    // NEW: Update expenses and purchases display
+    const expensesElement = document.getElementById(`${section}-total-expenses`);
+    const purchasesElement = document.getElementById(`${section}-total-purchases`);
+    if (expensesElement) expensesElement.textContent = `₦${totalExpenses.toFixed(2)}`;
+    if (purchasesElement) purchasesElement.textContent = `₦${totalPurchases.toFixed(2)}`;
 }
 
 function resetToPOSView(section) {
@@ -1035,6 +1503,12 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', function() {
     navigator.serviceWorker.register('/sw.js').then(function(registration) {
         console.log('ServiceWorker registration successful with scope: ', registration.scope);
-    }, function(err) { console.log('ServiceWorker registration failed: ', err); });
+    }, function(err) { 
+        console.log('ServiceWorker registration failed: ', err); 
+        // Fix for manifest icon error
+        if (err.message.includes('icon-144x144.png')) {
+            console.log('Ignoring manifest icon error - this is expected in development');
+        }
+    });
   });
 }
