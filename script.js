@@ -1,6 +1,6 @@
 // Initialize Supabase with your configuration
 const supabaseUrl = 'https://qgayglybnnrhobcvftrs.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnYXlnbHlibm5yaG9iY3ZmdHJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2ODQ5ODMsImV4cCI6MjA3ODI2MDk4M30.dqiEe-v1cro5N4tuawu7Y1x5klSyjINsLHd9-V40QjQ';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnYXQiOjE3NjI2ODQ5ODMsImV4cCI6MjA3ODI2MDk4M30.dqiEe-v1cro5N4tuawu7Y1x5klSyjINsLHd9-V40QjQ';
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // Initialize data structures
@@ -30,10 +30,10 @@ const carts = {
 
 // Initialize sales data with proper default values
 const salesData = {
-    'grill': { total_sales: 0, total_transactions: 0, avg_transaction: 0, top_item: '-', dailySales: 0, dailyTransactions: 0 },
-    'wholesale': { total_sales: 0, total_transactions: 0, avg_transaction: 0, top_item: '-', dailySales: 0, dailyTransactions: 0 },
-    'building': { total_sales: 0, total_transactions: 0, avg_transaction: 0, top_item: '-', dailySales: 0, dailyTransactions: 0 },
-    'food': { total_sales: 0, total_transactions: 0, avg_transaction: 0, top_item: '-', dailySales: 0, dailyTransactions: 0 }
+    'grill': { total_sales: 0, total_transactions: 0, avg_transaction: 0, top_item: '-', dailySales: 0, dailyTransactions: 0, salesHistory: [] },
+    'wholesale': { total_sales: 0, total_transactions: 0, avg_transaction: 0, top_item: '-', dailySales: 0, dailyTransactions: 0, salesHistory: [] },
+    'building': { total_sales: 0, total_transactions: 0, avg_transaction: 0, top_item: '-', dailySales: 0, dailyTransactions: 0, salesHistory: [] },
+    'food': { total_sales: 0, total_transactions: 0, avg_transaction: 0, top_item: '-', dailySales: 0, dailyTransactions: 0, salesHistory: [] }
 };
 
 // Initialize user data with proper default values
@@ -44,7 +44,7 @@ const userData = {
     'food': { transactions: 0, sales: 0 }
 };
 
-// NEW: Initialize expenses data for each section
+// Initialize expenses data for each section
 const expensesData = {
     'grill': [],
     'wholesale': [],
@@ -52,7 +52,7 @@ const expensesData = {
     'food': []
 };
 
-// NEW: Initialize purchases data for each section
+// Initialize purchases data for each section
 const purchasesData = {
     'grill': [],
     'wholesale': [],
@@ -60,7 +60,7 @@ const purchasesData = {
     'food': []
 };
 
-// NEW: Initialize sales records for each section
+// Initialize sales records for each section
 const salesRecords = {
     'grill': [],
     'wholesale': [],
@@ -74,6 +74,10 @@ let currentView = 'pos';
 let currentFilter = 'all';
 let currentUser = null;
 
+// Chart instances
+const salesCharts = {};
+const profitLossCharts = {};
+
 // Load data from localStorage immediately on script load
 function loadDataFromLocalStorage() {
     sections.forEach(section => {
@@ -81,7 +85,6 @@ function loadDataFromLocalStorage() {
         salesData[section] = loadFromLocalStorage(`salesData_${section}`, salesData[section]);
         userData[section] = loadFromLocalStorage(`userData_${section}`, userData[section]);
         carts[section] = loadFromLocalStorage(`cart_${section}`, []);
-        // NEW: Load expenses, purchases, and sales records
         expensesData[section] = loadFromLocalStorage(`expenses_${section}`, []);
         purchasesData[section] = loadFromLocalStorage(`purchases_${section}`, []);
         salesRecords[section] = loadFromLocalStorage(`salesRecords_${section}`, []);
@@ -133,7 +136,7 @@ function isExpiringSoon(expiryDate) {
     const expiry = new Date(expiryDate);
     const diffTime = expiry - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays > 0 && diffDays <= 7;
+    return diffTime > 0 && diffDays <= 7;
 }
 
 // Get product status based on stock and expiry
@@ -183,9 +186,7 @@ function updateCategoryInventorySummary(section) {
     document.getElementById(`${section}-expired-count`).textContent = expiredCount;
 }
 
-// ===================================================================
-// --- MAJOR FIX: saveDataToSupabase ---
-// ===================================================================
+// Save data to Supabase with offline support
 async function saveDataToSupabase(table, data, id = null) {
     // 1. Prepare data for local storage (includes client-only fields)
     const localData = {
@@ -232,7 +233,7 @@ async function saveDataToSupabase(table, data, id = null) {
         updateCategoryInventorySummary(data.section);
         updateTotalInventory();
     } 
-    // NEW: Handle expenses
+    // Handle expenses
     else if (table === 'expenses') {
         if (!id) {
             id = generateOfflineId();
@@ -244,7 +245,7 @@ async function saveDataToSupabase(table, data, id = null) {
         loadExpensesTable(data.section);
         updateDepartmentStats(data.section);
     }
-    // NEW: Handle purchases
+    // Handle purchases
     else if (table === 'purchases') {
         if (!id) {
             id = generateOfflineId();
@@ -256,7 +257,7 @@ async function saveDataToSupabase(table, data, id = null) {
         loadPurchasesTable(data.section);
         updateDepartmentStats(data.section);
     }
-    // NEW: Handle sales records
+    // Handle sales records
     else if (table === 'sales_records') {
         if (!id) {
             id = generateOfflineId();
@@ -267,7 +268,7 @@ async function saveDataToSupabase(table, data, id = null) {
         saveToLocalStorage(`salesRecords_${data.section}`, salesRecords[data.section]);
         loadSalesRecordsTable(data.section);
     }
-    // --- FIX: Add optimistic updates for summary tables ---
+    // Add optimistic updates for summary tables
     else if (table === 'sales_data') {
         const section = id; // For sales_data, 'id' is the section name
         if (section && salesData[section]) {
@@ -275,6 +276,7 @@ async function saveDataToSupabase(table, data, id = null) {
             saveToLocalStorage(`salesData_${section}`, salesData[section]);
             updateReports(section);
             updateDepartmentStats(section);
+            updateSalesChart(section);
         }
     } 
     else if (table === 'user_data') {
@@ -287,9 +289,9 @@ async function saveDataToSupabase(table, data, id = null) {
     }
     else if (table === 'sales') {
         // For sales records, we need to track them for syncing
-        const salesRecords = loadFromLocalStorage('pending_sales', []);
-        salesRecords.push(localData);
-        saveToLocalStorage('pending_sales', salesRecords);
+        const pendingSales = loadFromLocalStorage('pending_sales', []);
+        pendingSales.push(localData);
+        saveToLocalStorage('pending_sales', pendingSales);
     }
     
     // 4. If online, attempt to sync with Supabase
@@ -342,7 +344,7 @@ async function saveDataToSupabase(table, data, id = null) {
     }
 }
 
-// NEW FUNCTION: Sync all pending offline data when coming back online
+// Sync all pending offline data when coming back online
 async function syncOfflineData() {
     if (!navigator.onLine) return;
     
@@ -379,7 +381,94 @@ async function syncOfflineData() {
             loadInventoryTable(section);
         });
         
-        // 2. Sync pending deletions
+        // 2. Sync pending expenses
+        sections.forEach(section => {
+            const offlineExpenses = expensesData[section].filter(item => item.isOffline);
+            offlineExpenses.forEach(async (expense) => {
+                try {
+                    const { isOffline, timestamp, userId, ...dataForSupabase } = expense;
+                    delete dataForSupabase.id;
+                    
+                    const { data: resultData, error } = await supabase.from('expenses').insert(dataForSupabase).select();
+                    if (error) throw error;
+                    
+                    if (resultData && resultData[0]) {
+                        // Remove the offline expense from local data
+                        const index = expensesData[section].findIndex(e => e.id === expense.id);
+                        if (index !== -1) {
+                            expensesData[section].splice(index, 1);
+                            syncCount++;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error syncing expense:', error);
+                }
+            });
+            
+            // Save the updated expenses
+            saveToLocalStorage(`expenses_${section}`, expensesData[section]);
+            loadExpensesTable(section);
+        });
+        
+        // 3. Sync pending purchases
+        sections.forEach(section => {
+            const offlinePurchases = purchasesData[section].filter(item => item.isOffline);
+            offlinePurchases.forEach(async (purchase) => {
+                try {
+                    const { isOffline, timestamp, userId, ...dataForSupabase } = purchase;
+                    delete dataForSupabase.id;
+                    
+                    const { data: resultData, error } = await supabase.from('purchases').insert(dataForSupabase).select();
+                    if (error) throw error;
+                    
+                    if (resultData && resultData[0]) {
+                        // Remove the offline purchase from local data
+                        const index = purchasesData[section].findIndex(p => p.id === purchase.id);
+                        if (index !== -1) {
+                            purchasesData[section].splice(index, 1);
+                            syncCount++;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error syncing purchase:', error);
+                }
+            });
+            
+            // Save the updated purchases
+            saveToLocalStorage(`purchases_${section}`, purchasesData[section]);
+            loadPurchasesTable(section);
+        });
+        
+        // 4. Sync pending sales records
+        sections.forEach(section => {
+            const offlineSalesRecords = salesRecords[section].filter(item => item.isOffline);
+            offlineSalesRecords.forEach(async (record) => {
+                try {
+                    const { isOffline, timestamp, userId, ...dataForSupabase } = record;
+                    delete dataForSupabase.id;
+                    
+                    const { data: resultData, error } = await supabase.from('sales_records').insert(dataForSupabase).select();
+                    if (error) throw error;
+                    
+                    if (resultData && resultData[0]) {
+                        // Remove the offline record from local data
+                        const index = salesRecords[section].findIndex(r => r.id === record.id);
+                        if (index !== -1) {
+                            salesRecords[section].splice(index, 1);
+                            syncCount++;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error syncing sales record:', error);
+                }
+            });
+            
+            // Save the updated sales records
+            saveToLocalStorage(`salesRecords_${section}`, salesRecords[section]);
+            loadSalesRecordsTable(section);
+        });
+        
+        // 5. Sync pending deletions
         const pendingDeletions = loadFromLocalStorage('pending_deletions', []);
         for (const deletion of pendingDeletions) {
             try {
@@ -397,7 +486,7 @@ async function syncOfflineData() {
             saveToLocalStorage('pending_deletions', []);
         }
         
-        // 3. Sync pending sales
+        // 6. Sync pending sales
         const pendingSales = loadFromLocalStorage('pending_sales', []);
         for (const sale of pendingSales) {
             try {
@@ -419,7 +508,7 @@ async function syncOfflineData() {
             saveToLocalStorage('pending_sales', []);
         }
         
-        // 4. Sync sales_data and user_data for each section
+        // 7. Sync sales_data and user_data for each section
         for (const section of sections) {
             try {
                 // Sync sales data
@@ -435,6 +524,12 @@ async function syncOfflineData() {
                     if (insertError) throw insertError;
                 }
                 
+                syncCount++;
+            } catch (error) {
+                console.error(`Error syncing ${section} sales data:`, error);
+            }
+            
+            try {
                 // Sync user data
                 const { data: existingUserData, error: userError } = await supabase.from('user_data').select('*').eq('id', section).single();
                 
@@ -450,7 +545,7 @@ async function syncOfflineData() {
                 
                 syncCount++;
             } catch (error) {
-                console.error(`Error syncing ${section} data:`, error);
+                console.error(`Error syncing ${section} user data:`, error);
             }
         }
         
@@ -459,6 +554,8 @@ async function syncOfflineData() {
             updateReports(section);
             updateUserStats(section);
             updateDepartmentStats(section);
+            updateSalesChart(section);
+            updateProfitLossChart(section);
         });
         
         showNotification(`Successfully synced ${syncCount} items to the server.`, 'success');
@@ -488,7 +585,7 @@ supabase.auth.onAuthStateChange((event, session) => {
     }
 });
 
-// Update user info in the UI
+// Update user info in UI
 function updateUserInfo(user) {
     const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Admin User';
     const email = user.email || '';
@@ -536,7 +633,7 @@ async function loadDataFromSupabase() {
             supabase.from('user_data').select('*').eq('id', section).single()
         );
         
-        // NEW: Load expenses, purchases, and sales records
+        // Load expenses, purchases, and sales records
         const expensesPromises = sections.map(section => 
             supabase.from('expenses').select('*').eq('section', section).order('created_at', { ascending: false })
         );
@@ -574,6 +671,7 @@ async function loadDataFromSupabase() {
                     loadInventoryTable(section);
                     updateDepartmentStats(section);
                     updateCategoryInventorySummary(section);
+                    updateTotalInventory();
                 }
             });
         }
@@ -587,6 +685,7 @@ async function loadDataFromSupabase() {
                     salesData[section] = { ...data, ...salesData[section] };
                     saveToLocalStorage(`salesData_${section}`, salesData[section]);
                     updateReports(section);
+                    updateSalesChart(section);
                 }
             });
         }
@@ -604,36 +703,42 @@ async function loadDataFromSupabase() {
             });
         }
         
-        // NEW: Process expenses results
+        // Process expenses results
         if (expensesResults.status === 'fulfilled') {
             expensesResults.value.forEach(({ data, error }, index) => {
                 const section = sections[index];
                 if (!error && data) {
-                    expensesData[section] = data;
+                    // Merge server data with local offline data
+                    const localOfflineExpenses = expensesData[section].filter(e => e.isOffline);
+                    expensesData[section] = [...data, ...localOfflineExpenses];
                     saveToLocalStorage(`expenses_${section}`, expensesData[section]);
                     loadExpensesTable(section);
                 }
             });
         }
         
-        // NEW: Process purchases results
+        // Process purchases results
         if (purchasesResults.status === 'fulfilled') {
             purchasesResults.value.forEach(({ data, error }, index) => {
                 const section = sections[index];
                 if (!error && data) {
-                    purchasesData[section] = data;
+                    // Merge server data with local offline data
+                    const localOfflinePurchases = purchasesData[section].filter(p => p.isOffline);
+                    purchasesData[section] = [...data, ...localOfflinePurchases];
                     saveToLocalStorage(`purchases_${section}`, purchasesData[section]);
                     loadPurchasesTable(section);
                 }
             });
         }
         
-        // NEW: Process sales records results
+        // Process sales records results
         if (salesRecordsResults.status === 'fulfilled') {
             salesRecordsResults.value.forEach(({ data, error }, index) => {
                 const section = sections[index];
                 if (!error && data) {
-                    salesRecords[section] = data;
+                    // Merge server data with local offline data
+                    const localOfflineRecords = salesRecords[section].filter(r => r.isOffline);
+                    salesRecords[section] = [...data, ...localOfflineRecords];
                     saveToLocalStorage(`salesRecords_${section}`, salesRecords[section]);
                     loadSalesRecordsTable(section);
                 }
@@ -676,12 +781,19 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('emailLoginBtn').disabled = true;
         document.getElementById('emailLoginBtn').textContent = 'Signing In...';
         supabase.auth.signInWithPassword({ email, password }).then(({ data, error }) => {
-            if (error) { errorElement.textContent = error.message; document.getElementById('emailLoginBtn').disabled = false; document.getElementById('emailLoginBtn').textContent = 'Sign In'; }
+            if (error) { 
+                errorElement.textContent = error.message; 
+                document.getElementById('emailLoginBtn').disabled = false; 
+                document.getElementById('emailLoginBtn').textContent = 'Sign In'; 
+            }
         });
     });
 
     document.getElementById('logoutBtn').addEventListener('click', () => supabase.auth.signOut());
-    document.getElementById('forgotPasswordLink').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('forgotPasswordModal').classList.add('active'); });
+    document.getElementById('forgotPasswordLink').addEventListener('click', (e) => { 
+        e.preventDefault(); 
+        document.getElementById('forgotPasswordModal').classList.add('active'); 
+    });
 
     document.querySelectorAll('.js-modal-close').forEach(button => {
         button.addEventListener('click', () => closeModal(button.getAttribute('data-target')));
@@ -701,10 +813,15 @@ document.addEventListener('DOMContentLoaded', function() {
             const filter = button.getAttribute('data-filter');
             if (!section) {
                 document.querySelectorAll('.filter-btn:not([data-section])').forEach(btn => btn.classList.remove('active'));
-                button.classList.add('active'); currentFilter = filter; loadTotalInventoryTable(); return;
+                button.classList.add('active'); 
+                currentFilter = filter; 
+                loadTotalInventoryTable(); 
+                return;
             }
             document.querySelectorAll(`[data-section="${section}"].filter-btn`).forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active'); currentFilter = filter; loadInventoryTable(section);
+            button.classList.add('active'); 
+            currentFilter = filter; 
+            loadInventoryTable(section);
         });
     });
 
@@ -713,7 +830,7 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelector('.js-complete-checkout-btn').addEventListener('click', completeCheckout);
     document.querySelector('.js-reset-password-btn').addEventListener('click', resetPassword);
 
-    // NEW: Event listeners for expenses, purchases, and sales records
+    // Event listeners for expenses, purchases, and sales records
     document.querySelector('.js-add-expense-btn').addEventListener('click', () => showAddExpenseModal(currentSection));
     document.querySelector('.js-add-purchase-btn').addEventListener('click', () => showAddPurchaseModal(currentSection));
     document.querySelector('.js-add-expense-confirm-btn').addEventListener('click', addExpense);
@@ -724,39 +841,81 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function setupEventDelegation() {
     document.querySelector('.nav-tabs').addEventListener('click', (e) => {
-        const tab = e.target.closest('.nav-tab'); if (!tab) return;
+        const tab = e.target.closest('.nav-tab'); 
+        if (!tab) return;
         const section = tab.getAttribute('data-section');
-        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active')); tab.classList.add('active');
+        document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active')); 
+        tab.classList.add('active');
         document.querySelectorAll('.section-container').forEach(s => s.classList.remove('active'));
         if (section === 'total-inventory') {
-            document.getElementById('total-inventory-section').classList.add('active'); currentSection = 'total-inventory'; updateTotalInventory();
+            document.getElementById('total-inventory-section').classList.add('active'); 
+            currentSection = 'total-inventory'; 
+            updateTotalInventory();
         } else {
-            document.getElementById(`${section}-section`).classList.add('active'); currentSection = section; resetToPOSView(section);
+            document.getElementById(`${section}-section`).classList.add('active'); 
+            currentSection = section; 
+            resetToPOSView(section);
         }
     });
 
     document.querySelectorAll('.sub-nav').forEach(nav => {
         nav.addEventListener('click', (e) => {
-            const item = e.target.closest('.sub-nav-item'); if (!item) return;
+            const item = e.target.closest('.sub-nav-item'); 
+            if (!item) return;
             const view = item.getAttribute('data-view');
             const section = nav.closest('.section-container').id.replace('-section', '');
-            document.querySelectorAll(`#${section}-section .sub-nav-item`).forEach(i => i.classList.remove('active')); item.classList.add('active');
+            document.querySelectorAll(`#${section}-section .sub-nav-item`).forEach(i => i.classList.remove('active')); 
+            item.classList.add('active');
             document.querySelectorAll(`#${section}-section .view-content`).forEach(v => v.classList.remove('active'));
             document.getElementById(`${section}-${view}-view`).classList.add('active');
             currentView = view;
-            if (view === 'inventory') { loadInventoryTable(section); updateCategoryInventorySummary(section); }
-            else if (view === 'reports') updateReports(section);
-            else if (view === 'account') updateUserStats(section);
-            // NEW: Handle new views
-            else if (view === 'expenses') { loadExpensesTable(section); updateDepartmentStats(section); }
-            else if (view === 'purchases') { loadPurchasesTable(section); updateDepartmentStats(section); }
-            else if (view === 'sales-history') { loadSalesRecordsTable(section); }
+            if (view === 'inventory') { 
+                loadInventoryTable(section); 
+                updateCategoryInventorySummary(section); 
+            }
+            else if (view === 'reports') { 
+                updateReports(section); 
+                updateSalesChart(section); 
+            }
+            else if (view === 'account') {
+                updateUserStats(section); 
+            }
+            // Handle new views
+            else if (view === 'financial') { 
+                loadExpensesTable(section); 
+                loadPurchasesTable(section); 
+                updateProfitLossChart(section);
+            }
+            else if (view === 'sales-history') { 
+                loadSalesRecordsTable(section); 
+            }
+        });
+    });
+
+    // Financial tabs
+    document.querySelectorAll('.financial-tabs').forEach(tabs => {
+        tabs.addEventListener('click', (e) => {
+            const tab = e.target.closest('.financial-tab'); 
+            if (!tab) return;
+            const tabName = tab.getAttribute('data-tab');
+            const section = tabs.closest('.section-container').id.replace('-section', '');
+            
+            document.querySelectorAll(`#${section}-financial-view .financial-tab`).forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            
+            document.querySelectorAll(`#${section}-financial-view .financial-tab-content`).forEach(c => c.classList.remove('active'));
+            document.getElementById(`${section}-${tabName}-tab`).classList.add('active');
+            
+            if (tabName === 'profit-loss') {
+                updateProfitLossChart(section);
+            }
         });
     });
 
     document.querySelectorAll('.js-pos-search-results').forEach(container => {
         container.addEventListener('click', (e) => {
-            const resultItem = e.target.closest('.pos-search-result-item'); if (!resultItem) return;
+            const resultItem = e.target.closest('.pos-search-result-item'); 
+            if (!resultItem) return;
             const section = container.getAttribute('data-section');
             const itemId = resultItem.getAttribute('data-id');
             const item = inventory[section].find(invItem => invItem.id == itemId);
@@ -790,7 +949,8 @@ function setupEventDelegation() {
     document.querySelectorAll('.js-inventory-container').forEach(container => {
         container.addEventListener('click', (e) => {
             const section = container.getAttribute('data-section');
-            const btn = e.target.closest('.action-btn'); if (!btn) return;
+            const btn = e.target.closest('.action-btn'); 
+            if (!btn) return;
             const row = btn.closest('tr');
             const itemId = row.getAttribute('data-item-id');
             if (btn.classList.contains('delete')) deleteInventoryItem(section, itemId);
@@ -799,7 +959,8 @@ function setupEventDelegation() {
     });
     
     document.querySelector('.js-total-inventory-container').addEventListener('click', (e) => {
-        const btn = e.target.closest('.action-btn'); if (!btn) return;
+        const btn = e.target.closest('.action-btn'); 
+        if (!btn) return;
         const row = btn.closest('tr');
         const itemId = row.getAttribute('data-item-id');
         const section = row.getAttribute('data-section');
@@ -807,33 +968,36 @@ function setupEventDelegation() {
         else editInventoryItem(section, itemId);
     });
 
-    // NEW: Event delegation for expenses table
+    // Event delegation for expenses table
     document.querySelectorAll('.js-expenses-container').forEach(container => {
         container.addEventListener('click', (e) => {
             const section = container.getAttribute('data-section');
-            const btn = e.target.closest('.action-btn'); if (!btn) return;
+            const btn = e.target.closest('.action-btn'); 
+            if (!btn) return;
             const row = btn.closest('tr');
             const itemId = row.getAttribute('data-item-id');
             if (btn.classList.contains('delete')) deleteExpense(section, itemId);
         });
     });
 
-    // NEW: Event delegation for purchases table
+    // Event delegation for purchases table
     document.querySelectorAll('.js-purchases-container').forEach(container => {
         container.addEventListener('click', (e) => {
             const section = container.getAttribute('data-section');
-            const btn = e.target.closest('.action-btn'); if (!btn) return;
+            const btn = e.target.closest('.action-btn'); 
+            if (!btn) return;
             const row = btn.closest('tr');
             const itemId = row.getAttribute('data-item-id');
             if (btn.classList.contains('delete')) deletePurchase(section, itemId);
         });
     });
 
-    // NEW: Event delegation for sales records table
+    // Event delegation for sales records table
     document.querySelectorAll('.js-sales-records-container').forEach(container => {
         container.addEventListener('click', (e) => {
             const section = container.getAttribute('data-section');
-            const btn = e.target.closest('.action-btn'); if (!btn) return;
+            const btn = e.target.closest('.action-btn'); 
+            if (!btn) return;
             const row = btn.closest('tr');
             const itemId = row.getAttribute('data-item-id');
             if (btn.classList.contains('delete')) deleteSalesRecord(section, itemId);
@@ -852,10 +1016,12 @@ function initializeApp() {
         updateReports(section);
         updateUserStats(section);
         updateCategoryInventorySummary(section);
-        // NEW: Initialize new views
+        // Initialize new views
         loadExpensesTable(section);
         loadPurchasesTable(section);
         loadSalesRecordsTable(section);
+        updateSalesChart(section);
+        updateProfitLossChart(section);
         const form = document.getElementById(`${section}-account-form`);
         if (form) form.addEventListener('submit', (e) => { e.preventDefault(); saveAccountInfo(section); });
         const searchInput = document.querySelector(`.js-inventory-search[data-section="${section}"]`);
@@ -892,15 +1058,18 @@ function initializePOSSearch(section) {
 
 function updateCart(section) {
     const cartItemsContainer = document.querySelector(`.js-cart-items[data-section="${section}"]`);
-    cartItemsContainer.innerHTML = ''; let subtotal = 0;
+    cartItemsContainer.innerHTML = ''; 
+    let subtotal = 0;
     if (carts[section].length === 0) {
         cartItemsContainer.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-shopping-cart"></i></div><h3 class="empty-state-title">Your Cart is Empty</h3><p class="empty-state-description">Search for products to add to your cart.</p></div>`;
         document.querySelector(`.js-checkout-btn[data-section="${section}"]`).disabled = true;
     } else {
         carts[section].forEach(item => {
-            const itemTotal = item.price * item.quantity; subtotal += itemTotal;
+            const itemTotal = item.price * item.quantity; 
+            subtotal += itemTotal;
             const cartItem = document.createElement('div');
-            cartItem.className = 'cart-item'; cartItem.setAttribute('data-item-id', item.id);
+            cartItem.className = 'cart-item'; 
+            cartItem.setAttribute('data-item-id', item.id);
             cartItem.innerHTML = `<div class="cart-item-info"><div class="cart-item-name">${item.name}</div><div class="cart-item-details">₦${item.price.toFixed(2)} × ${item.quantity}</div></div><div class="cart-item-actions"><button class="quantity-btn">-</button><span>${item.quantity}</span><button class="quantity-btn">+</button><button class="action-btn delete"><i class="fas fa-trash"></i></button></div>`;
             cartItemsContainer.appendChild(cartItem);
         });
@@ -924,9 +1093,11 @@ function loadInventoryTable(section) {
         inventoryContainer.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-warehouse"></i></div><h3 class="empty-state-title">${searchTerm ? 'No Products Found' : 'No Products in Inventory'}</h3><p class="empty-state-description">${searchTerm ? 'Try a different search term.' : 'Start by adding products to your inventory.'}</p><button class="btn btn-primary js-add-inventory-btn" data-section="${section}"><i class="fas fa-plus"></i> Add Your First Product</button></div>`;
         return;
     }
-    const inventoryTable = document.createElement('table'); inventoryTable.className = 'inventory-table';
+    const inventoryTable = document.createElement('table'); 
+    inventoryTable.className = 'inventory-table';
     inventoryTable.innerHTML = `<thead><tr><th>Product</th><th>Price</th><th>Stock</th><th>Expiry Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>${filteredItems.map(item => {
-        const status = getProductStatus(item); let statusClass = '', statusText = '';
+        const status = getProductStatus(item); 
+        let statusClass = '', statusText = '';
         if (status === 'in-stock') { statusClass = 'status-in-stock'; statusText = 'In Stock'; }
         else if (status === 'low-stock') { statusClass = 'status-low-stock'; statusText = 'Low Stock'; }
         else if (status === 'out-of-stock') { statusClass = 'status-out-of-stock'; statusText = 'Out of Stock'; }
@@ -937,7 +1108,7 @@ function loadInventoryTable(section) {
     inventoryContainer.appendChild(inventoryTable);
 }
 
-// NEW: Load expenses table
+// Load expenses table
 function loadExpensesTable(section) {
     const expensesContainer = document.querySelector(`.js-expenses-container[data-section="${section}"]`);
     if (!expensesContainer) return;
@@ -956,7 +1127,7 @@ function loadExpensesTable(section) {
     expensesContainer.appendChild(expensesTable);
 }
 
-// NEW: Load purchases table
+// Load purchases table
 function loadPurchasesTable(section) {
     const purchasesContainer = document.querySelector(`.js-purchases-container[data-section="${section}"]`);
     if (!purchasesContainer) return;
@@ -975,7 +1146,7 @@ function loadPurchasesTable(section) {
     purchasesContainer.appendChild(purchasesTable);
 }
 
-// NEW: Load sales records table
+// Load sales records table
 function loadSalesRecordsTable(section) {
     const salesRecordsContainer = document.querySelector(`.js-sales-records-container[data-section="${section}"]`);
     if (!salesRecordsContainer) return;
@@ -999,7 +1170,8 @@ function updateTotalInventory() {
     let totalProducts = 0, totalValue = 0, totalExpired = 0, totalExpiringSoon = 0;
     sections.forEach(section => {
         inventory[section].forEach(item => {
-            totalProducts++; totalValue += item.price * item.stock;
+            totalProducts++; 
+            totalValue += item.price * item.stock;
             if (isExpired(item.expiry_date)) totalExpired++;
             else if (isExpiringSoon(item.expiry_date)) totalExpiringSoon++;
         });
@@ -1016,7 +1188,12 @@ function loadTotalInventoryTable() {
     inventoryContainer.innerHTML = '';
     const searchInput = document.getElementById('total-inventory-search');
     const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : '';
-    let allItems = []; sections.forEach(section => { inventory[section].forEach(item => { allItems.push({ ...item, section }); }); });
+    let allItems = []; 
+    sections.forEach(section => { 
+        inventory[section].forEach(item => { 
+            allItems.push({ ...item, section }); 
+        }); 
+    });
     let filteredItems = allItems.filter(item => {
         const statusMatch = currentFilter === 'all' || getProductStatus(item) === currentFilter;
         const searchMatch = !searchTerm || item.name.toLowerCase().includes(searchTerm);
@@ -1026,29 +1203,43 @@ function loadTotalInventoryTable() {
         inventoryContainer.innerHTML = `<div class="empty-state"><div class="empty-state-icon"><i class="fas fa-warehouse"></i></div><h3 class="empty-state-title">${searchTerm ? 'No Products Found' : 'No Products in Inventory'}</h3><p class="empty-state-description">${searchTerm ? 'Try a different search term.' : 'Start by adding products to your inventory.'}</p></div>`;
         return;
     }
-    const inventoryTable = document.createElement('table'); inventoryTable.className = 'inventory-table';
+    const inventoryTable = document.createElement('table'); 
+    inventoryTable.className = 'inventory-table';
     inventoryTable.innerHTML = `<thead><tr><th>Product</th><th>Department</th><th>Price</th><th>Stock</th><th>Expiry Date</th><th>Status</th><th>Actions</th></tr></thead><tbody>${filteredItems.map(item => {
-        const status = getProductStatus(item); let statusClass = '', statusText = '';
+        const status = getProductStatus(item); 
+        let statusClass = '', statusText = '';
         if (status === 'in-stock') { statusClass = 'status-in-stock'; statusText = 'In Stock'; }
         else if (status === 'low-stock') { statusClass = 'status-low-stock'; statusText = 'Low Stock'; }
         else if (status === 'out-of-stock') { statusClass = 'status-out-of-stock'; statusText = 'Out of Stock'; }
         else if (status === 'expired') { statusClass = 'status-expired'; statusText = 'Expired'; }
         else if (status === 'expiring-soon') { statusClass = 'status-expiring-soon'; statusText = 'Expiring Soon'; }
-        let sectionColor = ''; if (item.section === 'grill') sectionColor = 'var(--grill-color)'; else if (item.section === 'wholesale') sectionColor = 'var(--wholesale-color)'; else if (item.section === 'building') sectionColor = 'var(--building-color)'; else if (item.section === 'food') sectionColor = 'var(--food-color)';
+        let sectionColor = ''; 
+        if (item.section === 'grill') sectionColor = 'var(--grill-color)'; 
+        else if (item.section === 'wholesale') sectionColor = 'var(--wholesale-color)'; 
+        else if (item.section === 'building') sectionColor = 'var(--building-color)'; 
+        else if (item.section === 'food') sectionColor = 'var(--food-color)';
         return `<tr data-item-id="${item.id}" data-section="${item.section}"><td>${item.name} ${item.isOffline ? '<i class="fas fa-wifi" style="color: #f39c12;" title="Pending sync"></i>' : ''}</td><td><span style="color: ${sectionColor}; font-weight: 600;">${sectionNames[item.section]}</span></td><td>₦${item.price.toFixed(2)}</td><td>${item.stock}</td><td>${formatDate(item.expiry_date)}</td><td><span class="status-badge ${statusClass}">${statusText}</span></td><td><button class="action-btn"><i class="fas fa-edit"></i></button><button class="action-btn delete"><i class="fas fa-trash"></i></button></td></tr>`;
     }).join('')}</tbody>`;
     inventoryContainer.appendChild(inventoryTable);
 }
 
-function filterTotalInventory(searchTerm) { loadTotalInventoryTable(); }
+function filterTotalInventory(searchTerm) { 
+    loadTotalInventoryTable(); 
+}
 
 function resetPassword() {
     const email = document.getElementById('resetEmail').value;
     const errorElement = document.getElementById('reset-password-error');
     const successElement = document.getElementById('reset-password-success');
     supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin }).then(({ data, error }) => {
-        if (error) { errorElement.textContent = error.message; successElement.textContent = ''; }
-        else { successElement.textContent = 'Password reset email sent. Check your inbox.'; errorElement.textContent = ''; }
+        if (error) { 
+            errorElement.textContent = error.message; 
+            successElement.textContent = ''; 
+        }
+        else { 
+            successElement.textContent = 'Password reset email sent. Check your inbox.'; 
+            errorElement.textContent = ''; 
+        }
     });
 }
 
@@ -1059,18 +1250,22 @@ function showAddInventoryModal(section) {
     modal.classList.add('active');
 }
 
-// NEW: Show add expense modal
+// Show add expense modal
 function showAddExpenseModal(section) {
     const modal = document.getElementById('addExpenseModal');
     document.getElementById('addExpenseForm').reset();
+    // Set today's date as default
+    document.getElementById('expenseDate').value = new Date().toISOString().split('T')[0];
     modal.setAttribute('data-section', section);
     modal.classList.add('active');
 }
 
-// NEW: Show add purchase modal
+// Show add purchase modal
 function showAddPurchaseModal(section) {
     const modal = document.getElementById('addPurchaseModal');
     document.getElementById('addPurchaseForm').reset();
+    // Set today's date as default
+    document.getElementById('purchaseDate').value = new Date().toISOString().split('T')[0];
     modal.setAttribute('data-section', section);
     modal.classList.add('active');
 }
@@ -1087,10 +1282,12 @@ function addNewInventory() {
     saveDataToSupabase('inventory', newItem).then(() => {
         modal.classList.remove('active');
         showNotification(`${name} added successfully!`, 'success');
-    }).catch(error => { console.error('Error adding item:', error); });
+    }).catch(error => { 
+        console.error('Error adding item:', error); 
+    });
 }
 
-// NEW: Add expense
+// Add expense
 function addExpense() {
     const modal = document.getElementById('addExpenseModal');
     const section = modal.getAttribute('data-section');
@@ -1102,10 +1299,12 @@ function addExpense() {
     saveDataToSupabase('expenses', newExpense).then(() => {
         modal.classList.remove('active');
         showNotification('Expense added successfully!', 'success');
-    }).catch(error => { console.error('Error adding expense:', error); });
+    }).catch(error => { 
+        console.error('Error adding expense:', error); 
+    });
 }
 
-// NEW: Add purchase
+// Add purchase
 function addPurchase() {
     const modal = document.getElementById('addPurchaseModal');
     const section = modal.getAttribute('data-section');
@@ -1117,7 +1316,9 @@ function addPurchase() {
     saveDataToSupabase('purchases', newPurchase).then(() => {
         modal.classList.remove('active');
         showNotification('Purchase added successfully!', 'success');
-    }).catch(error => { console.error('Error adding purchase:', error); });
+    }).catch(error => { 
+        console.error('Error adding purchase:', error); 
+    });
 }
 
 function editInventoryItem(section, itemId) {
@@ -1150,11 +1351,13 @@ function updateInventoryItem() {
         saveDataToSupabase('inventory', updatedItem, itemId).then(() => {
             editModal.classList.remove('active');
             showNotification(`${name} updated successfully!`, 'success');
-        }).catch(error => { console.error('Error updating item:', error); });
+        }).catch(error => { 
+            console.error('Error updating item:', error); 
+        });
     }
 }
 
-// NEW: Delete expense
+// Delete expense
 function deleteExpense(section, expenseId) {
     if (confirm('Are you sure you want to delete this expense?')) {
         if (navigator.onLine && !expenseId.startsWith('offline_')) {
@@ -1176,7 +1379,7 @@ function deleteExpense(section, expenseId) {
     }
 }
 
-// NEW: Delete purchase
+// Delete purchase
 function deletePurchase(section, purchaseId) {
     if (confirm('Are you sure you want to delete this purchase?')) {
         if (navigator.onLine && !purchaseId.startsWith('offline_')) {
@@ -1198,7 +1401,7 @@ function deletePurchase(section, purchaseId) {
     }
 }
 
-// NEW: Delete sales record
+// Delete sales record
 function deleteSalesRecord(section, recordId) {
     if (confirm('Are you sure you want to delete this sales record? This will reverse the sale and restore inventory.')) {
         const record = salesRecords[section].find(r => r.id === recordId);
@@ -1246,7 +1449,7 @@ function deleteSalesRecord(section, recordId) {
     }
 }
 
-// NEW: View sales record details
+// View sales record details
 function viewSalesRecord(section, recordId) {
     const record = salesRecords[section].find(r => r.id === recordId);
     if (record) {
@@ -1280,7 +1483,7 @@ function viewSalesRecord(section, recordId) {
     }
 }
 
-// --- FIXED FUNCTION: deleteInventoryItem ---
+// Delete inventory item
 function deleteInventoryItem(section, itemId) {
     if (confirm('Are you sure you want to delete this item?')) {
         const item = inventory[section].find(invItem => invItem.id === itemId);
@@ -1318,21 +1521,36 @@ function deleteInventoryItem(section, itemId) {
 }
 
 function addToCart(section, item) {
-    if (item.stock <= 0) { showNotification(`${item.name} is out of stock`, 'error'); return; }
+    if (item.stock <= 0) { 
+        showNotification(`${item.name} is out of stock`, 'error'); 
+        return; 
+    }
     const existingItem = carts[section].find(cartItem => cartItem.id === item.id);
     if (existingItem) {
-        if (existingItem.quantity >= item.stock) { showNotification(`Cannot add more ${item.name}. Only ${item.stock} in stock.`, 'warning'); return; }
+        if (existingItem.quantity >= item.stock) { 
+            showNotification(`Cannot add more ${item.name}. Only ${item.stock} in stock.`, 'warning'); 
+            return; 
+        }
         existingItem.quantity += 1;
-    } else { carts[section].push({ id: item.id, name: item.name, price: item.price, quantity: 1 }); }
+    } else { 
+        carts[section].push({ id: item.id, name: item.name, price: item.price, quantity: 1 }); 
+    }
     saveToLocalStorage(`cart_${section}`, carts[section]);
-    updateCart(section); showNotification(`${item.name} added to cart`, 'success');
+    updateCart(section); 
+    showNotification(`${item.name} added to cart`, 'success');
 }
 
 function incrementQuantity(section, itemId) {
     const item = carts[section].find(cartItem => cartItem.id === itemId);
     const inventoryItem = inventory[section].find(invItem => invItem.id === itemId);
-    if (item && inventoryItem && item.quantity < inventoryItem.stock) { item.quantity += 1; saveToLocalStorage(`cart_${section}`, carts[section]); updateCart(section); }
-    else if (item && inventoryItem) { showNotification(`Cannot add more ${item.name}. Only ${inventoryItem.stock} in stock.`, 'warning'); }
+    if (item && inventoryItem && item.quantity < inventoryItem.stock) { 
+        item.quantity += 1; 
+        saveToLocalStorage(`cart_${section}`, carts[section]); 
+        updateCart(section); 
+    }
+    else if (item && inventoryItem) { 
+        showNotification(`Cannot add more ${item.name}. Only ${inventoryItem.stock} in stock.`, 'warning'); 
+    }
 }
 
 function decrementQuantity(section, itemId) {
@@ -1340,27 +1558,38 @@ function decrementQuantity(section, itemId) {
     if (itemIndex !== -1) {
         if (carts[section][itemIndex].quantity > 1) carts[section][itemIndex].quantity -= 1;
         else carts[section].splice(itemIndex, 1);
-        saveToLocalStorage(`cart_${section}`, carts[section]); updateCart(section);
+        saveToLocalStorage(`cart_${section}`, carts[section]); 
+        updateCart(section);
     }
 }
 
 function removeFromCart(section, itemId) {
     carts[section] = carts[section].filter(cartItem => cartItem.id !== itemId);
-    saveToLocalStorage(`cart_${section}`, carts[section]); updateCart(section);
+    saveToLocalStorage(`cart_${section}`, carts[section]); 
+    updateCart(section);
 }
 
 function processCheckout(section) {
-    if (carts[section].length === 0) { showNotification('Your cart is empty', 'error'); return; }
+    if (carts[section].length === 0) { 
+        showNotification('Your cart is empty', 'error'); 
+        return; 
+    }
     const checkoutModal = document.getElementById('checkoutModal');
-    const checkoutSummary = document.getElementById('checkout-summary'); let subtotal = 0; let summaryHTML = '<table class="inventory-table">';
-    carts[section].forEach(item => { const itemTotal = item.price * item.quantity; subtotal += itemTotal; summaryHTML += `<tr><td>${item.name}</td><td>₦${item.price.toFixed(2)}</td><td>${item.quantity}</td><td>₦${itemTotal.toFixed(2)}</td></tr>`; });
+    const checkoutSummary = document.getElementById('checkout-summary'); 
+    let subtotal = 0; 
+    let summaryHTML = '<table class="inventory-table">';
+    carts[section].forEach(item => { 
+        const itemTotal = item.price * item.quantity; 
+        subtotal += itemTotal; 
+        summaryHTML += `<tr><td>${item.name}</td><td>₦${item.price.toFixed(2)}</td><td>${item.quantity}</td><td>₦${itemTotal.toFixed(2)}</td></tr>`; 
+    });
     summaryHTML += `<tr><td colspan="3" class="total-label">Total</td><td>₦${subtotal.toFixed(2)}</td></tr></table>`;
     checkoutSummary.innerHTML = summaryHTML;
     checkoutModal.setAttribute('data-section', section);
     checkoutModal.classList.add('active');
 }
 
-// --- UPDATED FUNCTION: completeCheckout ---
+// Complete checkout
 function completeCheckout() {
     const checkoutModal = document.getElementById('checkoutModal');
     const section = checkoutModal.getAttribute('data-section');
@@ -1390,7 +1619,7 @@ function completeCheckout() {
         created_at: new Date().toISOString()
     };
 
-    // --- FIX: Manually update ALL local state FIRST ---
+    // Manually update ALL local state FIRST
     salesData[section].total_sales += subtotal; 
     salesData[section].total_transactions += 1;
     salesData[section].avg_transaction = salesData[section].total_sales / salesData[section].total_transactions;
@@ -1420,9 +1649,9 @@ function completeCheckout() {
         saveDataToSupabase('sales_data', salesData[section], section);
         saveDataToSupabase('user_data', userData[section], section);
         
-        // --- FIX: Update UI ONCE at the end ---
+        // Update UI ONCE at the end
         carts[section] = [];
-        saveToLocalStorage(`cart_${section}`, []);
+        saveToLocalStorage(`cart_${section}`, carts[section]);
         updateCart(section); 
         loadInventoryTable(section); 
         updateReports(section);
@@ -1430,6 +1659,8 @@ function completeCheckout() {
         updateDepartmentStats(section);
         updateCategoryInventorySummary(section);
         updateTotalInventory();
+        updateSalesChart(section);
+        updateProfitLossChart(section);
         
         checkoutModal.classList.remove('active');
         showNotification(`Sale completed successfully!`, 'success');
@@ -1439,7 +1670,9 @@ function completeCheckout() {
     });
 }
 
-function filterInventory(section, searchTerm) { loadInventoryTable(section); }
+function filterInventory(section, searchTerm) { 
+    loadInventoryTable(section); 
+}
 
 function updateReports(section) {
     const data = salesData[section];
@@ -1447,6 +1680,61 @@ function updateReports(section) {
     document.getElementById(`${section}-total-transactions`).textContent = data.total_transactions || 0;
     document.getElementById(`${section}-avg-transaction`).textContent = `₦${(data.avg_transaction || 0).toFixed(2)}`;
     document.getElementById(`${section}-top-item`).textContent = data.top_item || '-';
+    
+    // Update sales analysis metrics
+    updateSalesAnalysis(section);
+}
+
+function updateSalesAnalysis(section) {
+    // Calculate daily average sales
+    const totalDays = Math.max(1, salesRecords[section].length);
+    const dailyAvgSales = salesData[section].total_sales / totalDays;
+    document.getElementById(`${section}-daily-avg-sales`).textContent = `₦${dailyAvgSales.toFixed(2)}`;
+    
+    // Find peak sales day
+    const salesByDay = {};
+    salesRecords[section].forEach(record => {
+        const day = new Date(record.created_at).toLocaleDateString();
+        if (!salesByDay[day]) salesByDay[day] = 0;
+        salesByDay[day] += record.total;
+    });
+    
+    let peakDay = '-';
+    let peakSales = 0;
+    for (const [day, sales] of Object.entries(salesByDay)) {
+        if (sales > peakSales) {
+            peakSales = sales;
+            peakDay = day;
+        }
+    }
+    document.getElementById(`${section}-peak-sales-day`).textContent = peakDay;
+    
+    // Calculate sales growth rate
+    const recentSales = salesRecords[section].slice(0, 7).reduce((sum, record) => sum + record.total, 0);
+    const previousSales = salesRecords[section].slice(7, 14).reduce((sum, record) => sum + record.total, 0);
+    const growthRate = previousSales > 0 ? ((recentSales - previousSales) / previousSales * 100) : 0;
+    document.getElementById(`${section}-sales-growth`).textContent = `${growthRate.toFixed(1)}%`;
+    
+    // Find most profitable item
+    const itemProfits = {};
+    salesRecords[section].forEach(record => {
+        if (record.items) {
+            record.items.forEach(item => {
+                if (!itemProfits[item.name]) itemProfits[item.name] = 0;
+                itemProfits[item.name] += item.total;
+            });
+        }
+    });
+    
+    let profitableItem = '-';
+    let maxProfit = 0;
+    for (const [item, profit] of Object.entries(itemProfits)) {
+        if (profit > maxProfit) {
+            maxProfit = profit;
+            profitableItem = item;
+        }
+    }
+    document.getElementById(`${section}-profitable-item`).textContent = profitableItem;
 }
 
 function updateUserStats(section) {
@@ -1459,7 +1747,7 @@ function updateDepartmentStats(section) {
     const lowStockItems = inventory[section].filter(item => getProductStatus(item) === 'low-stock').length;
     const dailySales = salesData[section]?.dailySales || 0;
     
-    // NEW: Calculate total expenses and purchases
+    // Calculate total expenses and purchases
     const totalExpenses = expensesData[section].reduce((sum, expense) => sum + expense.amount, 0);
     const totalPurchases = purchasesData[section].reduce((sum, purchase) => sum + purchase.amount, 0);
     
@@ -1467,11 +1755,14 @@ function updateDepartmentStats(section) {
     document.getElementById(`${section}-daily-transactions`).textContent = salesData[section]?.dailyTransactions || 0;
     document.getElementById(`${section}-low-stock`).textContent = lowStockItems;
     
-    // NEW: Update expenses and purchases display
+    // Update expenses and purchases display
     const expensesElement = document.getElementById(`${section}-total-expenses`);
     const purchasesElement = document.getElementById(`${section}-total-purchases`);
+    const netProfitElement = document.getElementById(`${section}-net-profit`);
+    
     if (expensesElement) expensesElement.textContent = `₦${totalExpenses.toFixed(2)}`;
     if (purchasesElement) purchasesElement.textContent = `₦${totalPurchases.toFixed(2)}`;
+    if (netProfitElement) netProfitElement.textContent = `₦${(dailySales - totalExpenses).toFixed(2)}`;
 }
 
 function resetToPOSView(section) {
@@ -1489,13 +1780,127 @@ function saveAccountInfo(section) {
     showNotification('Account information saved (locally).', 'success');
 }
 
-function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
+function closeModal(modalId) { 
+    document.getElementById(modalId).classList.remove('active'); 
+}
 
 function showNotification(message, type = 'info') {
     const notification = document.getElementById('notification');
-    notification.textContent = message; notification.className = `notification ${type}`;
+    notification.textContent = message; 
+    notification.className = `notification ${type}`;
     notification.classList.add('show');
-    setTimeout(() => { notification.classList.remove('show'); }, 3000);
+    setTimeout(() => { 
+        notification.classList.remove('show'); 
+    }, 3000);
+}
+
+// Update sales chart
+function updateSalesChart(section) {
+    const ctx = document.getElementById(`${section}-sales-chart`);
+    if (!ctx) return;
+    
+    // Destroy existing chart if it exists
+    if (salesCharts[section]) {
+        salesCharts[section].destroy();
+    }
+    
+    // Prepare data for the last 7 days
+    const last7Days = [];
+    const chartSalesData = [];
+    
+    for (let i = 6; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toLocaleDateString();
+        last7Days.push(dateStr);
+        
+        // Calculate sales for this day
+        const daySales = salesRecords[section]
+            .filter(record => new Date(record.created_at).toLocaleDateString() === dateStr)
+            .reduce((sum, record) => sum + record.total, 0);
+        chartSalesData.push(daySales);
+    }
+    
+    salesCharts[section] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: last7Days,
+            datasets: [{
+                label: 'Daily Sales',
+                data: chartSalesData,
+                borderColor: getComputedStyle(document.documentElement).getPropertyValue('--primary-color'),
+                backgroundColor: getComputedStyle(document.documentElement).getPropertyValue('--primary-color') + '20',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return '₦' + value.toFixed(0);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Update profit and loss chart
+function updateProfitLossChart(section) {
+    const ctx = document.getElementById(`${section}-profit-loss-chart`);
+    if (!ctx) return;
+    
+    // Destroy existing chart if it exists
+    if (profitLossCharts[section]) {
+        profitLossCharts[section].destroy();
+    }
+    
+    // Calculate totals
+    const totalRevenue = salesData[section].total_sales || 0;
+    const totalExpenses = expensesData[section].reduce((sum, expense) => sum + expense.amount, 0);
+    const totalPurchases = purchasesData[section].reduce((sum, purchase) => sum + purchase.amount, 0);
+    const netProfit = totalRevenue - totalExpenses - totalPurchases;
+    
+    // Update summary values
+    document.getElementById(`${section}-total-revenue`).textContent = `₦${totalRevenue.toFixed(2)}`;
+    document.getElementById(`${section}-total-expenses-pl`).textContent = `₦${totalExpenses.toFixed(2)}`;
+    document.getElementById(`${section}-total-purchases-pl`).textContent = `₦${totalPurchases.toFixed(2)}`;
+    document.getElementById(`${section}-net-profit-pl`).textContent = `₦${netProfit.toFixed(2)}`;
+    
+    profitLossCharts[section] = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ['Revenue', 'Expenses', 'Purchases'],
+            datasets: [{
+                data: [totalRevenue, totalExpenses, totalPurchases],
+                backgroundColor: [
+                    getComputedStyle(document.documentElement).getPropertyValue('--success-color'),
+                    getComputedStyle(document.documentElement).getPropertyValue('--danger-color'),
+                    getComputedStyle(document.documentElement).getPropertyValue('--warning-color')
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
 }
 
 // Register Service Worker
