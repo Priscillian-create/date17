@@ -1,7 +1,3 @@
-// ===================================================================
-// --- SCRIPT.JS - COMPLETE, UPDATED, AND FIXED VERSION ---
-// ===================================================================
-
 // Initialize Supabase with your configuration
 const supabaseUrl = 'https://qgayglybnnrhobcvftrs.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFnYXlnbHlibm5yaG9iY3ZmdHJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI2ODQ5ODMsImV4cCI6MjA3ODI2MDk4M30.dqiEe-v1cro5N4tuawu7Y1x5klSyjINsLHd9-V40QjQ';
@@ -161,6 +157,7 @@ async function saveDataToSupabase(table, data, id = null) {
         ...data,
         timestamp: new Date().toISOString(),
         userId: currentUser ? currentUser.id : 'offline_user',
+        isOffline: !navigator.onLine || (id && id.startsWith('offline_')),
     };
 
     // 2. Save to local storage immediately
@@ -203,6 +200,12 @@ async function saveDataToSupabase(table, data, id = null) {
             saveToLocalStorage(`userData_${section}`, userData[section]);
             updateUserStats(section);
         }
+    }
+    else if (table === 'sales') {
+        // For sales records, we need to track them for syncing
+        const salesRecords = loadFromLocalStorage('pending_sales', []);
+        salesRecords.push(localData);
+        saveToLocalStorage('pending_sales', salesRecords);
     }
     
     // 4. If online, attempt to sync with Supabase
@@ -248,6 +251,115 @@ async function saveDataToSupabase(table, data, id = null) {
     }
 }
 
+// NEW FUNCTION: Sync all pending offline data when coming back online
+async function syncOfflineData() {
+    if (!navigator.onLine) return;
+    
+    showNotification('Syncing offline data...', 'info');
+    let syncCount = 0;
+    
+    try {
+        // 1. Sync offline inventory items
+        sections.forEach(section => {
+            const offlineItems = inventory[section].filter(item => item.isOffline);
+            offlineItems.forEach(async (item) => {
+                try {
+                    const { isOffline, timestamp, userId, ...dataForSupabase } = item;
+                    delete dataForSupabase.id;
+                    
+                    const { data: resultData, error } = await supabase.from('inventory').insert(dataForSupabase).select();
+                    if (error) throw error;
+                    
+                    if (resultData && resultData[0]) {
+                        // Update the local item with the server ID and mark as synced
+                        const index = inventory[section].findIndex(i => i.id === item.id);
+                        if (index !== -1) {
+                            inventory[section][index].id = resultData[0].id;
+                            inventory[section][index].isOffline = false;
+                            syncCount++;
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error syncing inventory item:', error);
+                }
+            });
+            
+            // Save the updated inventory
+            saveToLocalStorage(`inventory_${section}`, inventory[section]);
+            loadInventoryTable(section);
+        });
+        
+        // 2. Sync pending sales
+        const pendingSales = loadFromLocalStorage('pending_sales', []);
+        for (const sale of pendingSales) {
+            try {
+                const { isOffline, timestamp, userId, ...dataForSupabase } = sale;
+                
+                const { data: resultData, error } = await supabase.from('sales').insert(dataForSupabase).select();
+                if (error) throw error;
+                
+                if (resultData && resultData[0]) {
+                    syncCount++;
+                }
+            } catch (error) {
+                console.error('Error syncing sale:', error);
+            }
+        }
+        
+        // Clear pending sales after syncing
+        if (pendingSales.length > 0) {
+            saveToLocalStorage('pending_sales', []);
+        }
+        
+        // 3. Sync sales_data and user_data for each section
+        for (const section of sections) {
+            try {
+                // Sync sales data
+                const { data: existingSalesData, error: salesError } = await supabase.from('sales_data').select('*').eq('id', section).single();
+                
+                if (!salesError && existingSalesData) {
+                    // Update existing record
+                    const { data: updatedData, error: updateError } = await supabase.from('sales_data').update(salesData[section]).eq('id', section);
+                    if (updateError) throw updateError;
+                } else {
+                    // Insert new record
+                    const { data: newData, error: insertError } = await supabase.from('sales_data').insert({ id: section, ...salesData[section] });
+                    if (insertError) throw insertError;
+                }
+                
+                // Sync user data
+                const { data: existingUserData, error: userError } = await supabase.from('user_data').select('*').eq('id', section).single();
+                
+                if (!userError && existingUserData) {
+                    // Update existing record
+                    const { data: updatedData, error: updateError } = await supabase.from('user_data').update(userData[section]).eq('id', section);
+                    if (updateError) throw updateError;
+                } else {
+                    // Insert new record
+                    const { data: newData, error: insertError } = await supabase.from('user_data').insert({ id: section, ...userData[section] });
+                    if (insertError) throw insertError;
+                }
+                
+                syncCount++;
+            } catch (error) {
+                console.error(`Error syncing ${section} data:`, error);
+            }
+        }
+        
+        // Update all UI components after syncing
+        sections.forEach(section => {
+            updateReports(section);
+            updateUserStats(section);
+            updateDepartmentStats(section);
+        });
+        
+        showNotification(`Successfully synced ${syncCount} items to the server.`, 'success');
+    } catch (error) {
+        console.error('Error during sync:', error);
+        showNotification('Some data could not be synced. It will be kept locally.', 'warning');
+    }
+}
+
 // Listen for authentication state changes
 supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_IN' && session) {
@@ -284,8 +396,12 @@ function updateUserInfo(user) {
 function handleOnlineStatus() {
     document.getElementById('offlineIndicator').classList.remove('show');
     showNotification('Connection restored. Syncing data...', 'info');
-    loadDataFromSupabase();
+    // First sync any pending offline data, then load fresh data from server
+    syncOfflineData().then(() => {
+        loadDataFromSupabase();
+    });
 }
+
 function handleOfflineStatus() {
     document.getElementById('offlineIndicator').classList.add('show');
     showNotification('You\'re now offline. Changes will be saved locally.', 'warning');
@@ -300,7 +416,9 @@ async function loadDataFromSupabase() {
             supabase.from('inventory').select('*').eq('section', section).then(({ data, error }) => {
                 if (error) { console.error(`Error loading ${section} inventory:`, error); return; }
                 if (data) {
-                    inventory[section] = data;
+                    // Merge server data with local offline data
+                    const localItems = inventory[section].filter(item => item.isOffline);
+                    inventory[section] = [...data, ...localItems];
                     saveToLocalStorage(`inventory_${section}`, inventory[section]);
                     loadInventoryTable(section);
                     updateDepartmentStats(section);
@@ -309,10 +427,20 @@ async function loadDataFromSupabase() {
                 }
             });
             supabase.from('sales_data').select('*').eq('id', section).single().then(({ data, error }) => {
-                if (!error && data) { salesData[section] = data; saveToLocalStorage(`salesData_${section}`, salesData[section]); updateReports(section); }
+                if (!error && data) { 
+                    // Merge with local data, preserving any local changes
+                    salesData[section] = { ...data, ...salesData[section] }; 
+                    saveToLocalStorage(`salesData_${section}`, salesData[section]); 
+                    updateReports(section); 
+                }
             });
             supabase.from('user_data').select('*').eq('id', section).single().then(({ data, error }) => {
-                if (!error && data) { userData[section] = data; saveToLocalStorage(`userData_${section}`, userData[section]); updateUserStats(section); }
+                if (!error && data) { 
+                    // Merge with local data, preserving any local changes
+                    userData[section] = { ...data, ...userData[section] }; 
+                    saveToLocalStorage(`userData_${section}`, userData[section]); 
+                    updateUserStats(section); 
+                }
             });
         });
     } catch (error) { console.error('Error loading data from Supabase:', error); }
