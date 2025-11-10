@@ -166,12 +166,26 @@ async function saveDataToSupabase(table, data, id = null) {
 
     // 3. Update in-memory data structures and UI immediately (Optimistic UI)
     if (table === 'inventory') {
-        if (!id) {
+        // Special handling for deleted items
+        if (data.deleted === true) {
+            // Remove from local inventory immediately
+            const index = inventory[data.section].findIndex(item => item.id === id);
+            if (index !== -1) {
+                inventory[data.section].splice(index, 1);
+                saveToLocalStorage(`inventory_${data.section}`, inventory[data.section]);
+                loadInventoryTable(data.section);
+                updateDepartmentStats(data.section);
+                updateCategoryInventorySummary(data.section);
+                updateTotalInventory();
+            }
+        } else if (!id) {
+            // New item
             id = generateOfflineId();
             localData.id = id;
             localData.isOffline = true;
             inventory[data.section].push(localData);
         } else {
+            // Update existing item
             const index = inventory[data.section].findIndex(item => item.id === id);
             if (index !== -1) {
                 inventory[data.section][index] = { ...inventory[data.section][index], ...localData };
@@ -219,9 +233,16 @@ async function saveDataToSupabase(table, data, id = null) {
             
             let result;
             if (id && !id.startsWith('offline_')) {
-                const { data: resultData, error } = await supabase.from(table).update(dataForSupabase).eq('id', id).select();
-                if (error) throw error;
-                result = resultData[0];
+                // Handle deletion
+                if (dataForSupabase.deleted === true) {
+                    const { error } = await supabase.from(table).delete().eq('id', id);
+                    if (error) throw error;
+                    result = { id, deleted: true };
+                } else {
+                    const { data: resultData, error } = await supabase.from(table).update(dataForSupabase).eq('id', id).select();
+                    if (error) throw error;
+                    result = resultData[0];
+                }
             } else {
                 const { data: resultData, error } = await supabase.from(table).insert(dataForSupabase).select();
                 if (error) throw error;
@@ -288,7 +309,25 @@ async function syncOfflineData() {
             loadInventoryTable(section);
         });
         
-        // 2. Sync pending sales
+        // 2. Sync pending deletions
+        const pendingDeletions = loadFromLocalStorage('pending_deletions', []);
+        for (const deletion of pendingDeletions) {
+            try {
+                const { id, section } = deletion;
+                const { error } = await supabase.from('inventory').delete().eq('id', id);
+                if (error) throw error;
+                syncCount++;
+            } catch (error) {
+                console.error('Error syncing deletion:', error);
+            }
+        }
+        
+        // Clear pending deletions after syncing
+        if (pendingDeletions.length > 0) {
+            saveToLocalStorage('pending_deletions', []);
+        }
+        
+        // 3. Sync pending sales
         const pendingSales = loadFromLocalStorage('pending_sales', []);
         for (const sale of pendingSales) {
             try {
@@ -310,7 +349,7 @@ async function syncOfflineData() {
             saveToLocalStorage('pending_sales', []);
         }
         
-        // 3. Sync sales_data and user_data for each section
+        // 4. Sync sales_data and user_data for each section
         for (const section of sections) {
             try {
                 // Sync sales data
@@ -412,7 +451,7 @@ async function loadDataFromSupabase() {
     try {
         console.log('Loading data from Supabase...');
         sections.forEach(section => {
-            supabase.from('inventory').select('*').eq('section', section).then(({ data, error }) => {
+            supabase.from('inventory').select('*').eq('section', section).is('deleted', 'false').then(({ data, error }) => {
                 if (error) { console.error(`Error loading ${section} inventory:`, error); return; }
                 if (data) {
                     // Replace local inventory with server data (offline items have been removed during sync)
@@ -796,20 +835,39 @@ function updateInventoryItem() {
     }
 }
 
+// --- FIXED FUNCTION: deleteInventoryItem ---
 function deleteInventoryItem(section, itemId) {
     if (confirm('Are you sure you want to delete this item?')) {
         const item = inventory[section].find(invItem => invItem.id === itemId);
         if (item) {
-            item.deleted = true; item.deleted_at = new Date().toISOString();
-            saveDataToSupabase('inventory', item, itemId).then(() => {
-                inventory[section] = inventory[section].filter(invItem => invItem.id !== itemId);
-                saveToLocalStorage(`inventory_${section}`, inventory[section]);
-                loadInventoryTable(section);
-                updateDepartmentStats(section);
-                updateCategoryInventorySummary(section);
-                updateTotalInventory();
-                showNotification('Item deleted successfully', 'success');
-            }).catch(error => { console.error('Error deleting item:', error); });
+            // If online, try to delete from server immediately
+            if (navigator.onLine && !itemId.startsWith('offline_')) {
+                supabase.from('inventory').delete().eq('id', itemId).then(({ error }) => {
+                    if (error) {
+                        console.error('Error deleting item from server:', error);
+                        showNotification('Error deleting item from server. Will try again when online.', 'error');
+                        // Add to pending deletions for later sync
+                        const pendingDeletions = loadFromLocalStorage('pending_deletions', []);
+                        pendingDeletions.push({ id: itemId, section });
+                        saveToLocalStorage('pending_deletions', pendingDeletions);
+                    } else {
+                        showNotification('Item deleted successfully', 'success');
+                    }
+                });
+            } else if (itemId.startsWith('offline_')) {
+                // For offline items, just track the deletion
+                const pendingDeletions = loadFromLocalStorage('pending_deletions', []);
+                pendingDeletions.push({ id: itemId, section });
+                saveToLocalStorage('pending_deletions', pendingDeletions);
+            }
+            
+            // Remove from local inventory immediately
+            inventory[section] = inventory[section].filter(invItem => invItem.id !== itemId);
+            saveToLocalStorage(`inventory_${section}`, inventory[section]);
+            loadInventoryTable(section);
+            updateDepartmentStats(section);
+            updateCategoryInventorySummary(section);
+            updateTotalInventory();
         }
     }
 }
