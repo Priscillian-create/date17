@@ -271,11 +271,10 @@ async function syncOfflineData() {
                     if (error) throw error;
                     
                     if (resultData && resultData[0]) {
-                        // Update the local item with the server ID and mark as synced
+                        // Remove the offline item from the local inventory
                         const index = inventory[section].findIndex(i => i.id === item.id);
                         if (index !== -1) {
-                            inventory[section][index].id = resultData[0].id;
-                            inventory[section][index].isOffline = false;
+                            inventory[section].splice(index, 1);
                             syncCount++;
                         }
                     }
@@ -416,9 +415,8 @@ async function loadDataFromSupabase() {
             supabase.from('inventory').select('*').eq('section', section).then(({ data, error }) => {
                 if (error) { console.error(`Error loading ${section} inventory:`, error); return; }
                 if (data) {
-                    // Merge server data with local offline data
-                    const localItems = inventory[section].filter(item => item.isOffline);
-                    inventory[section] = [...data, ...localItems];
+                    // Replace local inventory with server data (offline items have been removed during sync)
+                    inventory[section] = data;
                     saveToLocalStorage(`inventory_${section}`, inventory[section]);
                     loadInventoryTable(section);
                     updateDepartmentStats(section);
@@ -428,16 +426,16 @@ async function loadDataFromSupabase() {
             });
             supabase.from('sales_data').select('*').eq('id', section).single().then(({ data, error }) => {
                 if (!error && data) { 
-                    // Merge with local data, preserving any local changes
-                    salesData[section] = { ...data, ...salesData[section] }; 
+                    // Replace with server data (local changes have been synced)
+                    salesData[section] = data; 
                     saveToLocalStorage(`salesData_${section}`, salesData[section]); 
                     updateReports(section); 
                 }
             });
             supabase.from('user_data').select('*').eq('id', section).single().then(({ data, error }) => {
                 if (!error && data) { 
-                    // Merge with local data, preserving any local changes
-                    userData[section] = { ...data, ...userData[section] }; 
+                    // Replace with server data (local changes have been synced)
+                    userData[section] = data; 
                     saveToLocalStorage(`userData_${section}`, userData[section]); 
                     updateUserStats(section); 
                 }
